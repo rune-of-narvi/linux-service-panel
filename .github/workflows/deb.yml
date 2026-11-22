@@ -52,7 +52,13 @@ jobs:
           echo "version=$version" >> "$GITHUB_OUTPUT"
           mkdir -p dist
           cp "../$package" dist/
-          (cd dist && sha256sum "$package" > "$package.sha256")
+          latest_package=gnome-service-manager-latest.deb
+          cp "dist/$package" "dist/$latest_package"
+          (
+            cd dist
+            sha256sum "$package" > "$package.sha256"
+            sha256sum "$latest_package" > "$latest_package.sha256"
+          )
           dpkg-parsechangelog --show-field Changes |
             sed -e '1,3d' -e 's/^  \* /- /' -e 's/^    /  /' -e 's/^\.$//' > dist/release-notes.md
           grep -q '^- ' dist/release-notes.md
@@ -103,4 +109,4 @@ jobs:
             args=(--verify-tag)
           fi
           gh release create "$tag" dist/*.deb dist/*.sha256 --repo "$GITHUB_REPOSITORY" \
-            "${args[@]}" --title "$tag" --notes-file dist/release-notes.md
+            "${args[@]}" --title "$tag" --latest --notes-file dist/release-notes.md

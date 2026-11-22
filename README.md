@@ -6,11 +6,14 @@ systemd D-Bus API and uses systemctl to carry out actions.
 
 ## Install the package on Ubuntu
 
-Download the amd64 `.deb` from the [latest release](https://github.com/qashoou/gnome-service-manager/releases/latest).
-Run these commands from the download directory, using the filename you downloaded.
+[Download gnome-service-manager-latest.deb](https://github.com/qashoou/gnome-service-manager/releases/latest/download/gnome-service-manager-latest.deb)
+for amd64. [Numbered releases](https://github.com/qashoou/gnome-service-manager/releases)
+include versioned packages, checksums, and release notes.
+
+Run this command from the download directory.
 
 ```sh
-sudo apt install ./gnome-service-manager_0.3.0_amd64.deb
+sudo apt install ./gnome-service-manager-latest.deb
 ```
 
 Open **GNOME Service Manager** from Ubuntu's app grid or run
@@ -44,6 +47,8 @@ On GNOME on Xorg, use
 ## Use
 
 - Search by unit name, configured executable, main PID, or description.
+- Check **Show running services only** at the bottom to filter the list to
+  services that systemd reports as running. The checkbox also works with search.
 - Use the **Command Line** button to show the live arguments of each service’s
   main process. The column is hidden by default and is blank for sockets
   and services without a readable command line.

@@ -64,6 +64,30 @@ TEST(UnitRowSearch, EmptyQueryMatchesRowsWithoutAMainPid)
     EXPECT_FALSE(matches_query(socket, casefold("0")));
 }
 
+TEST(UnitRowFilter, IncludesOnlyRunningServices)
+{
+    UnitRow row;
+    row.name = "example.service";
+    row.active = "active";
+    row.substate = "running";
+    EXPECT_TRUE(is_running_service(row));
+
+    row.substate = "exited";
+    EXPECT_FALSE(is_running_service(row));
+    row.substate = "dead";
+    row.active = "inactive";
+    EXPECT_FALSE(is_running_service(row));
+    row.substate = "running";
+    row.active = "deactivating";
+    EXPECT_FALSE(is_running_service(row));
+    row.active = "active";
+    row.name = "example.socket";
+    row.substate = "listening";
+    EXPECT_FALSE(is_running_service(row));
+    row.substate = "running";
+    EXPECT_FALSE(is_running_service(row));
+}
+
 } // namespace
 
 TEST(CommandLine, PreservesWhitespaceAndEmptyArguments)

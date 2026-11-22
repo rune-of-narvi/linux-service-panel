@@ -1,3 +1,11 @@
+gnome-service-manager (0.4.0) noble; urgency=medium
+
+  * Add a Show running services only checkbox that works with search.
+  * Publish a stable latest-download link alongside the numbered release
+    packages and provide a checksum for each filename.
+
+ -- Qasim Shafi <5079901+qashoou@users.noreply.github.com>  Sun, 22 Nov 2026 22:15:00 +0100
+
 gnome-service-manager (0.3.0) noble; urgency=medium
 
   * Add an optional Command Line column for running services.

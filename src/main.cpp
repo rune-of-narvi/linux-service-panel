@@ -29,6 +29,7 @@ struct View
     GtkColumnViewColumn* command_line_column;
     GtkWidget* command_line_toggle;
     bool busy = false;
+    bool running_only = false;
 };
 
 constexpr std::array actions{Action::start, Action::stop, Action::enable, Action::disable};
@@ -336,7 +337,9 @@ void activate(GApplication* app, gpointer)
         +[](gpointer item, gpointer data) -> gboolean
         {
             const auto& view = *static_cast<View*>(data);
-            return matches_query(*get_row(item), view.query);
+            const auto& row = *get_row(item);
+            return (!view.running_only || is_running_service(row)) &&
+                   matches_query(row, view.query);
         },
         view, nullptr);
     auto* filtered = gtk_filter_list_model_new(G_LIST_MODEL(view->rows), GTK_FILTER(view->filter));
@@ -397,6 +400,20 @@ void activate(GApplication* app, gpointer)
     gtk_widget_set_margin_bottom(footer, 10);
     gtk_box_append(GTK_BOX(content), gtk_separator_new(GTK_ORIENTATION_HORIZONTAL));
     gtk_box_append(GTK_BOX(content), footer);
+
+    auto* running_only = gtk_check_button_new_with_label("Show running services only");
+    gtk_box_append(GTK_BOX(footer), running_only);
+    g_signal_connect(running_only, "toggled",
+                     G_CALLBACK(+[](GtkCheckButton* button, gpointer data)
+                                {
+                                    auto& view = *static_cast<View*>(data);
+                                    view.running_only = gtk_check_button_get_active(button);
+                                    gtk_filter_changed(GTK_FILTER(view.filter),
+                                                       view.running_only
+                                                           ? GTK_FILTER_CHANGE_MORE_STRICT
+                                                           : GTK_FILTER_CHANGE_LESS_STRICT);
+                                }),
+                     view);
 
     view->status = GTK_LABEL(gtk_label_new(nullptr));
     gtk_label_set_xalign(view->status, 0.0F);

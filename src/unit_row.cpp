@@ -46,6 +46,12 @@ bool matches_query(const UnitRow& row, std::string_view folded_query)
            (row.pid != 0 && std::to_string(row.pid).find(folded_query) != std::string::npos);
 }
 
+bool is_running_service(const UnitRow& row)
+{
+    // systemd can keep sockets and completed one-shot services active.
+    return row.name.ends_with(".service") && row.active == "active" && row.substate == "running";
+}
+
 std::string format_command_line(std::string_view arguments)
 {
     std::string command;
