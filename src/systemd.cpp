@@ -1,4 +1,4 @@
-#include "systemd.hpp"
+#include "systemd.h"
 
 #include <gio/gio.h>
 
@@ -65,9 +65,22 @@ std::string unit_file_name(const std::string& path)
     return slash == std::string::npos ? path : path.substr(slash + 1);
 }
 
-void read_service(GDBusConnection* bus, UnitEntry& entry)
+Variant get_properties(GDBusConnection* bus, const std::string& path, const char* interface)
 {
-    if (!entry.row.name.ends_with(".service") || entry.row.startup.starts_with("masked"))
+    auto reply = call(bus, path.c_str(), "org.freedesktop.DBus.Properties",
+                      "GetAll", g_variant_new("(s)", interface));
+    return variant(g_variant_get_child_value(reply.get(), 0));
+}
+
+std::string property_string(GVariant* properties, const char* key)
+{
+    const char* value = nullptr;
+    return g_variant_lookup(properties, key, "&s", &value) ? value : "";
+}
+
+void read_unit_details(GDBusConnection* bus, UnitEntry& entry)
+{
+    if (entry.row.startup.starts_with("masked"))
         return;
 
     auto& row = entry.row;
@@ -76,10 +89,17 @@ void read_service(GDBusConnection* bus, UnitEntry& entry)
             auto reply = call(bus, manager_path, manager_interface, "LoadUnit",
                               g_variant_new("(s)", row.name.c_str()));
             entry.path = string_at(reply.get(), 0);
+            auto props = get_properties(bus, entry.path, "org.freedesktop.systemd1.Unit");
+            row.active = property_string(props.get(), "ActiveState");
+            row.substate = property_string(props.get(), "SubState");
+            row.description = property_string(props.get(), "Description");
+            if (row.description == property_string(props.get(), "Id"))
+                row.description.clear();
         }
-        auto reply = call(bus, entry.path.c_str(), "org.freedesktop.DBus.Properties",
-                          "GetAll", g_variant_new("(s)", "org.freedesktop.systemd1.Service"));
-        auto props = variant(g_variant_get_child_value(reply.get(), 0));
+        if (!row.name.ends_with(".service"))
+            return;
+
+        auto props = get_properties(bus, entry.path, "org.freedesktop.systemd1.Service");
         guint32 pid = 0;
         g_variant_lookup(props.get(), "MainPID", "u", &pid);
         row.pid = pid;
@@ -131,6 +151,9 @@ std::vector<UnitRow> list_units()
         const auto name = string_at(unit.get(), 0);
         auto& entry = units[name];
         entry.row.name = name;
+        auto description = string_at(unit.get(), 1);
+        if (description != name)
+            entry.row.description = std::move(description);
         entry.row.active = string_at(unit.get(), 3);
         entry.row.substate = string_at(unit.get(), 4);
         entry.path = string_at(unit.get(), 6);
@@ -148,7 +171,7 @@ std::vector<UnitRow> list_units()
     std::vector<UnitRow> rows;
     rows.reserve(units.size());
     for (auto& [name, entry] : units) {
-        read_service(bus.get(), entry);
+        read_unit_details(bus.get(), entry);
         if (entry.row.active.empty())
             entry.row.active = "inactive";
         rows.push_back(std::move(entry.row));

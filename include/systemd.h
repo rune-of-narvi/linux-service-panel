@@ -6,6 +6,7 @@
 struct UnitRow {
     std::string name;
     std::string executable;
+    std::string description;
     std::string startup;
     std::string active;
     std::string substate;

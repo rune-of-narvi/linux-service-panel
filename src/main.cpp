@@ -1,13 +1,15 @@
-#include "systemd.hpp"
+#include "systemd.h"
 
 #include <adwaita.h>
 #include <unistd.h>
 
 #include <array>
+#include <compare>
 #include <cstdio>
 #include <exception>
 #include <memory>
 #include <string_view>
+#include <tuple>
 #include <utility>
 
 namespace {
@@ -39,9 +41,9 @@ enum class Column { pid, name, startup, status };
 
 constexpr std::array actions{Action::start, Action::stop, Action::enable, Action::disable};
 
-UnitRow* get_row(gpointer object)
+const UnitRow* get_row(gconstpointer object)
 {
-    return static_cast<UnitRow*>(g_object_get_data(G_OBJECT(object), "unit-row"));
+    return static_cast<UnitRow*>(g_object_get_data(G_OBJECT(const_cast<gpointer>(object)), "unit-row"));
 }
 
 const UnitRow* selected_row(const View& view)
@@ -67,23 +69,51 @@ void update_buttons(View& view)
                              || startup == "enabled-runtime"));
 }
 
+GtkWidget* make_cell_label()
+{
+    auto* label = gtk_label_new(nullptr);
+    gtk_label_set_xalign(GTK_LABEL(label), 0.0F);
+    gtk_label_set_ellipsize(GTK_LABEL(label), PANGO_ELLIPSIZE_END);
+    return label;
+}
+
+int compare_rows(const UnitRow& left, const UnitRow& right, Column type)
+{
+    switch (type) {
+    case Column::pid: return (left.pid > right.pid) - (left.pid < right.pid);
+    case Column::name: return left.name.compare(right.name);
+    case Column::startup: return left.startup.compare(right.startup);
+    case Column::status:
+        const auto order = std::tie(left.active, left.substate) <=> std::tie(right.active, right.substate);
+        return (order > 0) - (order < 0);
+    }
+    return 0;
+}
+
 void append_column(GtkColumnView* view, const char* title, Column type)
 {
+    const auto column_type = GINT_TO_POINTER(static_cast<int>(type));
     auto* factory = gtk_signal_list_item_factory_new();
     g_signal_connect(factory, "setup", G_CALLBACK(+[](GtkSignalListItemFactory*,
-                                                      GtkListItem* item, gpointer) {
-        auto* label = gtk_label_new(nullptr);
-        gtk_label_set_xalign(GTK_LABEL(label), 0.0F);
-        gtk_label_set_ellipsize(GTK_LABEL(label), PANGO_ELLIPSIZE_END);
-        gtk_widget_set_margin_top(label, 6);
-        gtk_widget_set_margin_bottom(label, 6);
-        gtk_list_item_set_child(item, label);
-    }), nullptr);
+                                                      GtkListItem* item, gpointer data) {
+        auto* label = make_cell_label();
+        GtkWidget* cell = label;
+        if (static_cast<Column>(GPOINTER_TO_INT(data)) == Column::name) {
+            cell = gtk_box_new(GTK_ORIENTATION_VERTICAL, 2);
+            auto* description = make_cell_label();
+            gtk_widget_add_css_class(description, "dim-label");
+            gtk_box_append(GTK_BOX(cell), label);
+            gtk_box_append(GTK_BOX(cell), description);
+        }
+        gtk_widget_set_margin_top(cell, 6);
+        gtk_widget_set_margin_bottom(cell, 6);
+        gtk_list_item_set_child(item, cell);
+    }), column_type);
     g_signal_connect(factory, "bind", G_CALLBACK(+[](GtkSignalListItemFactory*,
                                                      GtkListItem* item, gpointer data) {
         const auto& row = *get_row(gtk_list_item_get_item(item));
         const auto type = static_cast<Column>(GPOINTER_TO_INT(data));
-        auto* label = GTK_LABEL(gtk_list_item_get_child(item));
+        auto* cell = gtk_list_item_get_child(item);
         std::string text;
         switch (type) {
         case Column::pid: text = row.pid ? std::to_string(row.pid) : "—"; break;
@@ -91,7 +121,13 @@ void append_column(GtkColumnView* view, const char* title, Column type)
             text = row.name;
             if (!row.executable.empty())
                 text += "  ·  " + row.executable;
-            break;
+            gtk_label_set_text(GTK_LABEL(gtk_widget_get_first_child(cell)), text.c_str());
+            gtk_label_set_text(GTK_LABEL(gtk_widget_get_last_child(cell)), row.description.c_str());
+            gtk_widget_set_visible(gtk_widget_get_last_child(cell), !row.description.empty());
+            if (!row.description.empty())
+                text += "\n" + row.description;
+            gtk_widget_set_tooltip_text(cell, text.c_str());
+            return;
         case Column::startup: text = row.startup; break;
         case Column::status:
             text = row.active;
@@ -99,13 +135,20 @@ void append_column(GtkColumnView* view, const char* title, Column type)
                 text += " (" + row.substate + ")";
             break;
         }
-        gtk_label_set_text(label, text.c_str());
-        gtk_widget_set_tooltip_text(GTK_WIDGET(label), text.c_str());
-    }), GINT_TO_POINTER(static_cast<int>(type)));
+        gtk_label_set_text(GTK_LABEL(cell), text.c_str());
+        gtk_widget_set_tooltip_text(cell, text.c_str());
+    }), column_type);
     auto* column = gtk_column_view_column_new(title, GTK_LIST_ITEM_FACTORY(factory));
+    auto* sorter = gtk_custom_sorter_new(+[](gconstpointer left, gconstpointer right, gpointer data) {
+        return compare_rows(*get_row(left), *get_row(right), static_cast<Column>(GPOINTER_TO_INT(data)));
+    }, column_type, nullptr);
+    gtk_column_view_column_set_sorter(column, GTK_SORTER(sorter));
+    g_object_unref(sorter);
     gtk_column_view_column_set_resizable(column, true);
     gtk_column_view_column_set_expand(column, type == Column::name);
     gtk_column_view_append_column(view, column);
+    if (type == Column::name)
+        gtk_column_view_sort_by_column(view, column, GTK_SORT_ASCENDING);
     g_object_unref(column);
 }
 
@@ -208,6 +251,15 @@ std::string casefold(const char* value)
     return folded.get();
 }
 
+bool matches_query(const UnitRow& row, std::string_view query)
+{
+    return query.empty()
+        || casefold(row.name.c_str()).find(query) != std::string::npos
+        || casefold(row.executable.c_str()).find(query) != std::string::npos
+        || casefold(row.description.c_str()).find(query) != std::string::npos
+        || (row.pid != 0 && std::to_string(row.pid).find(query) != std::string::npos);
+}
+
 void activate(GApplication* app, gpointer)
 {
     if (auto* existing = gtk_application_get_active_window(GTK_APPLICATION(app))) {
@@ -241,13 +293,15 @@ void activate(GApplication* app, gpointer)
     view->rows = g_list_store_new(GTK_TYPE_STRING_OBJECT);
     view->filter = gtk_custom_filter_new(+[](gpointer item, gpointer data) -> gboolean {
         const auto& view = *static_cast<View*>(data);
-        const auto& row = *get_row(item);
-        return view.query.empty()
-            || casefold(row.name.c_str()).find(view.query) != std::string::npos
-            || casefold(row.executable.c_str()).find(view.query) != std::string::npos;
+        return matches_query(*get_row(item), view.query);
     }, view, nullptr);
     auto* filtered = gtk_filter_list_model_new(G_LIST_MODEL(view->rows), GTK_FILTER(view->filter));
-    view->selection = gtk_single_selection_new(G_LIST_MODEL(filtered));
+    auto* sorted = gtk_sort_list_model_new(G_LIST_MODEL(filtered), nullptr);
+    auto* columns = GTK_COLUMN_VIEW(gtk_column_view_new(nullptr));
+    gtk_sort_list_model_set_sorter(sorted, gtk_column_view_get_sorter(columns));
+    view->selection = gtk_single_selection_new(G_LIST_MODEL(sorted));
+    gtk_column_view_set_model(columns, GTK_SELECTION_MODEL(view->selection));
+    g_object_unref(view->selection);
     gtk_single_selection_set_autoselect(view->selection, false);
     gtk_single_selection_set_can_unselect(view->selection, true);
     g_signal_connect_swapped(view->selection, "notify::selected-item",
@@ -257,7 +311,6 @@ void activate(GApplication* app, gpointer)
         gtk_filter_changed(GTK_FILTER(view->filter), GTK_FILTER_CHANGE_DIFFERENT);
     }), view);
 
-    auto* columns = GTK_COLUMN_VIEW(gtk_column_view_new(GTK_SELECTION_MODEL(view->selection)));
     gtk_column_view_set_show_row_separators(columns, true);
     append_column(columns, "PID", Column::pid);
     append_column(columns, "Name / Executable", Column::name);

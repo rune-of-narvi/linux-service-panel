@@ -1,4 +1,4 @@
-/*.o
+/src/*.o
 /gnome-service-manager
 /debian/.debhelper/
 /debian/debhelper-build-stamp

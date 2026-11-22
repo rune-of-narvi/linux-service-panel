@@ -32,7 +32,9 @@ On GNOME on Xorg, use
 
 ## Use
 
-- Search by unit name or configured executable.
+- Search by unit name, configured executable, main PID, or description.
+- Click any column header to sort. Click it again to reverse the order.
+- Unit descriptions appear below the name and executable when available.
 - Select a row to start, stop, enable, or disable the unit.
 - Start and Stop change the current run state. Enable and Disable change
   startup links. To stop socket activation immediately, stop the socket too.
