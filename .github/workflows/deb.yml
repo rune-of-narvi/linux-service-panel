@@ -38,8 +38,8 @@ jobs:
           sudo apt-get install -y "../$package"
           test -x /usr/bin/gnome-service-manager
           test -s /usr/share/doc/gnome-service-manager/copyright
-          desktop-file-validate /usr/share/applications/io.github.qashoou.GnomeServiceManager.desktop
-          test -s /usr/share/polkit-1/actions/io.github.qashoou.GnomeServiceManager.policy
+          desktop-file-validate /usr/share/applications/local.GnomeServiceManager.desktop
+          test -s /usr/share/polkit-1/actions/local.GnomeServiceManager.policy
           if gnome-service-manager --backend > root-check.log 2>&1; then
             echo "Expected the helper to reject a launch without root." >&2
             exit 1

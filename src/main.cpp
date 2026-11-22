@@ -463,9 +463,9 @@ int main(int argc, char** argv)
     if (argc == 2 && std::string_view(argv[1]) == "--backend")
         return run_backend();
 
-    auto* app = adw_application_new("io.github.qashoou.GnomeServiceManager",
-                                    geteuid() == 0 ? G_APPLICATION_NON_UNIQUE
-                                                   : G_APPLICATION_DEFAULT_FLAGS);
+    auto* app = adw_application_new("local.GnomeServiceManager", geteuid() == 0
+                                                                     ? G_APPLICATION_NON_UNIQUE
+                                                                     : G_APPLICATION_DEFAULT_FLAGS);
     g_signal_connect(app, "activate", G_CALLBACK(activate), nullptr);
     const int status = g_application_run(G_APPLICATION(app), argc, argv);
     g_object_unref(app);

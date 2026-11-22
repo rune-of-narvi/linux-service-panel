@@ -2,7 +2,7 @@
 <!DOCTYPE policyconfig PUBLIC "-//freedesktop//DTD PolicyKit Policy Configuration 1.0//EN"
  "http://www.freedesktop.org/standards/PolicyKit/1/policyconfig.dtd">
 <policyconfig>
-  <action id="io.github.qashoou.GnomeServiceManager.manage">
+  <action id="local.GnomeServiceManager.manage">
     <description>Manage system services and sockets</description>
     <message>Authentication is required to open GNOME Service Manager</message>
     <icon_name>utilities-system-monitor</icon_name>
