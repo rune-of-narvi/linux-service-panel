@@ -49,6 +49,8 @@ On GNOME on Xorg, use
 - Search by unit name, configured executable, main PID, or description.
 - Check **Show running services only** at the bottom to filter the list to
   services that systemd reports as running. The checkbox also works with search.
+- The footer shows the total number of units and the number of running
+  services. Both counts use the full list, even when filters are active.
 - Use the **Command Line** button to show the live arguments of each service’s
   main process. The column is hidden by default and is blank for sockets
   and services without a readable command line.

@@ -1,3 +1,10 @@
+gnome-service-manager (0.4.1) noble; urgency=medium
+
+  * Show total units and running services in the footer. Both counts
+    remain visible and use the full list when filters are applied.
+
+ -- Qasim Shafi <5079901+qashoou@users.noreply.github.com>  Sun, 22 Nov 2026 22:45:00 +0100
+
 gnome-service-manager (0.4.0) noble; urgency=medium
 
   * Add a Show running services only checkbox that works with search.

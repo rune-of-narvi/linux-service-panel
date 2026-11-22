@@ -3,6 +3,7 @@
 #include <adwaita.h>
 #include <unistd.h>
 
+#include <algorithm>
 #include <array>
 #include <exception>
 #include <memory>
@@ -20,6 +21,7 @@ struct View
     GtkSingleSelection* selection;
     GtkSearchEntry* search;
     GtkLabel* status;
+    GtkLabel* counts;
     GtkWidget* refresh;
     std::array<GtkWidget*, 4> actions;
     std::string query;
@@ -197,6 +199,12 @@ void replace_rows(View& view, std::vector<UnitRow>& rows, const std::string& sel
     }
 }
 
+void show_status(View& view, const char* message)
+{
+    gtk_label_set_text(view.status, message);
+    gtk_widget_set_visible(GTK_WIDGET(view.status), *message != '\0');
+}
+
 void run(View& view, Action action)
 {
     if (view.busy)
@@ -207,8 +215,7 @@ void run(View& view, Action action)
 
     view.busy = true;
     update_buttons(view);
-    gtk_label_set_text(view.status,
-                       action == Action::refresh ? "Loading units…" : "Applying action…");
+    show_status(view, action == Action::refresh ? "Loading units…" : "Applying action…");
     // Keep the app alive while a systemd request is in flight, even if the window closes.
     auto* app = gtk_window_get_application(view.window);
     g_application_hold(G_APPLICATION(app));
@@ -229,21 +236,18 @@ void run(View& view, Action action)
             }
             if (error)
             {
-                gtk_label_set_text(view.status, error->message);
+                show_status(view, error->message);
                 g_error_free(error);
             }
             else
             {
+                // Count the full snapshot before search or the running-only filter hides rows.
+                const auto running = std::ranges::count_if(result->rows, is_running_service);
+                const auto counts = "Total units: " + std::to_string(result->rows.size()) +
+                                    "  ·  Running services: " + std::to_string(running);
+                gtk_label_set_text(view.counts, counts.c_str());
                 replace_rows(view, result->rows, request->unit);
-                if (!result->action_message.empty())
-                {
-                    gtk_label_set_text(view.status, result->action_message.c_str());
-                }
-                else
-                {
-                    const auto count = std::to_string(result->rows.size()) + " units";
-                    gtk_label_set_text(view.status, count.c_str());
-                }
+                show_status(view, result->action_message.c_str());
             }
             view.busy = false;
             update_buttons(view);
@@ -393,6 +397,16 @@ void activate(GApplication* app, gpointer)
     gtk_scrolled_window_set_child(GTK_SCROLLED_WINDOW(scroller), GTK_WIDGET(columns));
     gtk_box_append(GTK_BOX(content), scroller);
 
+    view->status = GTK_LABEL(gtk_label_new(nullptr));
+    gtk_label_set_xalign(view->status, 0.0F);
+    gtk_label_set_wrap(view->status, true);
+    gtk_label_set_selectable(view->status, true);
+    gtk_widget_set_margin_start(GTK_WIDGET(view->status), 12);
+    gtk_widget_set_margin_end(GTK_WIDGET(view->status), 12);
+    gtk_widget_set_margin_bottom(GTK_WIDGET(view->status), 6);
+    gtk_widget_set_visible(GTK_WIDGET(view->status), false);
+    gtk_box_append(GTK_BOX(content), GTK_WIDGET(view->status));
+
     auto* footer = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 8);
     gtk_widget_set_margin_start(footer, 12);
     gtk_widget_set_margin_end(footer, 12);
@@ -415,12 +429,12 @@ void activate(GApplication* app, gpointer)
                                 }),
                      view);
 
-    view->status = GTK_LABEL(gtk_label_new(nullptr));
-    gtk_label_set_xalign(view->status, 0.0F);
-    gtk_label_set_wrap(view->status, true);
-    gtk_label_set_selectable(view->status, true);
-    gtk_widget_set_hexpand(GTK_WIDGET(view->status), true);
-    gtk_box_append(GTK_BOX(footer), GTK_WIDGET(view->status));
+    view->counts = GTK_LABEL(gtk_label_new("Total units: —  ·  Running services: —"));
+    gtk_label_set_xalign(view->counts, 0.0F);
+    gtk_widget_set_hexpand(GTK_WIDGET(view->counts), true);
+    gtk_widget_set_tooltip_text(GTK_WIDGET(view->counts),
+                                "Counts are based on the full list before filtering.");
+    gtk_box_append(GTK_BOX(footer), GTK_WIDGET(view->counts));
 
     constexpr std::array labels{"Start", "Stop", "Enable", "Disable"};
     for (std::size_t index = 0; index < actions.size(); ++index)
