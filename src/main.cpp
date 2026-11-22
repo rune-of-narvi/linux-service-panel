@@ -1,4 +1,5 @@
 #include "backend.h"
+#include "glib_ptr.h"
 
 #include <adwaita.h>
 #include <unistd.h>
@@ -27,8 +28,7 @@ struct View
     std::array<GtkWidget*, 4> actions;
     std::string query;
     Backend backend;
-    std::unique_ptr<GCancellable, decltype(&g_object_unref)> cancellation{g_cancellable_new(),
-                                                                          g_object_unref};
+    ObjectPtr<GCancellable> cancellation{g_cancellable_new()};
     GtkColumnViewColumn* command_line_column;
     GtkWidget* command_line_toggle;
     bool busy = false;
@@ -36,6 +36,12 @@ struct View
 };
 
 constexpr std::array actions{Action::start, Action::stop, Action::enable, Action::disable};
+
+// GLib invokes this once it is finished with a C++ value transferred to it.
+template <typename T> void delete_data(gpointer data)
+{
+    delete static_cast<T*>(data);
+}
 
 // Each list item carries the full unit data used by sorting, filtering, and actions.
 const UnitRow* get_row(gconstpointer object)
@@ -145,56 +151,48 @@ GtkColumnViewColumn* append_column(GtkColumnView* view, const char* title, Colum
                        gtk_widget_set_tooltip_text(cell, text.c_str());
                    }),
         column_type);
-    auto* column = gtk_column_view_column_new(title, GTK_LIST_ITEM_FACTORY(factory));
-    auto* sorter = gtk_custom_sorter_new(
+    const ObjectPtr<GtkColumnViewColumn> column(
+        gtk_column_view_column_new(title, GTK_LIST_ITEM_FACTORY(factory)));
+    const ObjectPtr<GtkCustomSorter> sorter(gtk_custom_sorter_new(
         +[](gconstpointer left, gconstpointer right, gpointer data)
         {
             return compare_rows(*get_row(left), *get_row(right),
                                 static_cast<Column>(GPOINTER_TO_INT(data)));
         },
-        column_type, nullptr);
-    gtk_column_view_column_set_sorter(column, GTK_SORTER(sorter));
-    g_object_unref(sorter);
-    gtk_column_view_column_set_resizable(column, true);
-    gtk_column_view_column_set_expand(column, type == Column::name);
-    gtk_column_view_append_column(view, column);
+        column_type, nullptr));
+    gtk_column_view_column_set_sorter(column.get(), GTK_SORTER(sorter.get()));
+    gtk_column_view_column_set_resizable(column.get(), true);
+    gtk_column_view_column_set_expand(column.get(), type == Column::name);
+    gtk_column_view_append_column(view, column.get());
     if (type == Column::name)
-        gtk_column_view_sort_by_column(view, column, GTK_SORT_ASCENDING);
+        gtk_column_view_sort_by_column(view, column.get(), GTK_SORT_ASCENDING);
     if (type == Column::command_line)
-        gtk_column_view_column_set_fixed_width(column, 360);
-    g_object_unref(column);
-    return column;
+        gtk_column_view_column_set_fixed_width(column.get(), 360);
+    return column.get();
 }
 
 void replace_rows(View& view, std::vector<UnitRow>& rows, const std::string& selected)
 {
     // Replace the snapshot in one update, then restore selection by unit name.
     // The selected position may have changed after sorting or filtering.
-    std::vector<gpointer> objects;
-    objects.reserve(rows.size());
+    const GlibPtr<GPtrArray, g_ptr_array_unref> objects(
+        g_ptr_array_new_full(static_cast<guint>(rows.size()), g_object_unref));
     for (auto& row : rows)
     {
-        auto* object = gtk_string_object_new(row.name.c_str());
-        g_object_set_data_full(
-            G_OBJECT(object), "unit-row", new UnitRow(std::move(row)),
-            +[](gpointer data)
-            {
-                delete static_cast<UnitRow*>(data);
-            });
-        objects.push_back(object);
+        ObjectPtr<GtkStringObject> object(gtk_string_object_new(row.name.c_str()));
+        auto data = std::make_unique<UnitRow>(std::move(row));
+        g_object_set_data_full(G_OBJECT(object.get()), "unit-row", data.release(),
+                               delete_data<UnitRow>);
+        g_ptr_array_add(objects.get(), object.release());
     }
     g_list_store_splice(view.rows, 0, g_list_model_get_n_items(G_LIST_MODEL(view.rows)),
-                        objects.data(), static_cast<guint>(objects.size()));
-    for (auto* object : objects)
-        g_object_unref(object);
+                        objects->pdata, objects->len);
 
     auto* model = gtk_single_selection_get_model(view.selection);
     for (guint index = 0; !selected.empty() && index < g_list_model_get_n_items(model); ++index)
     {
-        auto* item = g_list_model_get_item(model, index);
-        const bool matches = get_row(item)->name == selected;
-        g_object_unref(item);
-        if (matches)
+        const ObjectPtr<GObject> item(static_cast<GObject*>(g_list_model_get_item(model, index)));
+        if (get_row(item.get())->name == selected)
         {
             gtk_single_selection_set_selected(view.selection, index);
             break;
@@ -221,28 +219,23 @@ void run(View& view, Action action)
     show_status(view, action == Action::refresh ? "Loading units…" : "Applying action…");
     // Keep the app alive while a systemd request is in flight, even if the window closes.
     auto* app = gtk_window_get_application(view.window);
-    g_application_hold(G_APPLICATION(app));
-    auto* task = g_task_new(
+    const ObjectPtr<GTask> task(g_task_new(
         view.window, view.cancellation.get(),
         +[](GObject* source, GAsyncResult* done, gpointer application)
         {
+            // Balance the application's hold even if the window closed during the task.
+            const GlibPtr<GApplication, g_application_release> hold(G_APPLICATION(application));
             auto& view = *static_cast<View*>(g_object_get_data(source, "view"));
             GError* error = nullptr;
             std::unique_ptr<Result> result(
                 static_cast<Result*>(g_task_propagate_pointer(G_TASK(done), &error)));
-            auto* request = static_cast<Request*>(g_task_get_task_data(G_TASK(done)));
+            const ErrorPtr task_error(error);
+            const auto* request = static_cast<const Request*>(g_task_get_task_data(G_TASK(done)));
             // The task can finish after the window was closed. Skip updates in that case.
             if (!gtk_window_get_application(view.window))
-            {
-                g_clear_error(&error);
-                g_application_release(G_APPLICATION(application));
                 return;
-            }
-            if (error)
-            {
-                show_status(view, error->message);
-                g_error_free(error);
-            }
+            if (task_error)
+                show_status(view, task_error->message);
             else
             {
                 // Count the full snapshot before search or the running-only filter hides rows.
@@ -255,22 +248,17 @@ void run(View& view, Action action)
             }
             view.busy = false;
             update_buttons(view);
-            g_application_release(G_APPLICATION(application));
         },
-        app);
+        app));
     // Capture the selected unit name on the UI thread before handing the request to the worker.
-    g_task_set_task_data(
-        task,
-        new Request{action, row ? row->name : "",
-                    gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(view.command_line_toggle)) !=
-                        FALSE},
-        +[](gpointer data)
-        {
-            delete static_cast<Request*>(data);
-        });
+    auto request = std::make_unique<Request>(
+        action, row ? row->name : "",
+        gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(view.command_line_toggle)) != FALSE);
+    g_task_set_task_data(task.get(), request.release(), delete_data<Request>);
+    g_application_hold(G_APPLICATION(app));
     // Perform blocking systemd calls in a worker. Only the completion callback updates GTK.
     g_task_run_in_thread(
-        task,
+        task.get(),
         +[](GTask* task, gpointer source, gpointer data, GCancellable* cancellation)
         {
             const auto& request = *static_cast<Request*>(data);
@@ -278,19 +266,13 @@ void run(View& view, Action action)
             try
             {
                 auto result = std::make_unique<Result>(view.backend.run(request, cancellation));
-                g_task_return_pointer(
-                    task, result.release(),
-                    +[](gpointer data)
-                    {
-                        delete static_cast<Result*>(data);
-                    });
+                g_task_return_pointer(task, result.release(), delete_data<Result>);
             }
             catch (const std::exception& error)
             {
                 g_task_return_new_error(task, G_IO_ERROR, G_IO_ERROR_FAILED, "%s", error.what());
             }
         });
-    g_object_unref(task);
 }
 
 void activate(GApplication* app, gpointer)
@@ -305,14 +287,10 @@ void activate(GApplication* app, gpointer)
     auto* window = GTK_WINDOW(adw_application_window_new(GTK_APPLICATION(app)));
     gtk_window_set_title(window, "Service Manager");
     gtk_window_set_default_size(window, 940, 640);
-    auto* view = new View{};
+    auto state = std::make_unique<View>();
+    auto* view = state.get();
     view->window = window;
-    g_object_set_data_full(
-        G_OBJECT(window), "view", view,
-        +[](gpointer data)
-        {
-            delete static_cast<View*>(data);
-        });
+    g_object_set_data_full(G_OBJECT(window), "view", state.release(), delete_data<View>);
 
     g_signal_connect(window, "close-request",
                      G_CALLBACK(+[](GtkWindow*, gpointer data) -> gboolean
@@ -354,11 +332,9 @@ void activate(GApplication* app, gpointer)
         view, nullptr);
     auto* filtered = gtk_filter_list_model_new(G_LIST_MODEL(view->rows), GTK_FILTER(view->filter));
     auto* sorted = gtk_sort_list_model_new(G_LIST_MODEL(filtered), nullptr);
-    auto* columns = GTK_COLUMN_VIEW(gtk_column_view_new(nullptr));
-    gtk_sort_list_model_set_sorter(sorted, gtk_column_view_get_sorter(columns));
     view->selection = gtk_single_selection_new(G_LIST_MODEL(sorted));
-    gtk_column_view_set_model(columns, GTK_SELECTION_MODEL(view->selection));
-    g_object_unref(view->selection);
+    auto* columns = GTK_COLUMN_VIEW(gtk_column_view_new(GTK_SELECTION_MODEL(view->selection)));
+    gtk_sort_list_model_set_sorter(sorted, gtk_column_view_get_sorter(columns));
     gtk_single_selection_set_autoselect(view->selection, false);
     gtk_single_selection_set_can_unselect(view->selection, true);
     g_signal_connect_swapped(view->selection, "notify::selected-item",
@@ -470,11 +446,9 @@ int main(int argc, char** argv)
     if (argc == 2 && std::string_view(argv[1]) == "--backend")
         return run_backend();
 
-    auto* app = adw_application_new("local.GnomeServiceManager", geteuid() == 0
-                                                                     ? G_APPLICATION_NON_UNIQUE
-                                                                     : G_APPLICATION_DEFAULT_FLAGS);
-    g_signal_connect(app, "activate", G_CALLBACK(activate), nullptr);
-    const int status = g_application_run(G_APPLICATION(app), argc, argv);
-    g_object_unref(app);
-    return status;
+    const ObjectPtr<AdwApplication> app(adw_application_new(
+        "local.GnomeServiceManager",
+        geteuid() == 0 ? G_APPLICATION_NON_UNIQUE : G_APPLICATION_DEFAULT_FLAGS));
+    g_signal_connect(app.get(), "activate", G_CALLBACK(activate), nullptr);
+    return g_application_run(G_APPLICATION(app.get()), argc, argv);
 }

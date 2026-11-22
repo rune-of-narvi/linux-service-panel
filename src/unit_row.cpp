@@ -1,10 +1,9 @@
 #include "unit_row.h"
 
-#include <glib.h>
+#include "glib_ptr.h"
 
 #include <algorithm>
 #include <compare>
-#include <memory>
 #include <tuple>
 
 int compare_rows(const UnitRow& left, const UnitRow& right, Column column)
@@ -32,8 +31,7 @@ std::string casefold(std::string_view text)
 {
     if (text.empty())
         return {};
-    const std::unique_ptr<char, decltype(&g_free)> folded(
-        g_utf8_casefold(text.data(), static_cast<gssize>(text.size())), g_free);
+    const GStringPtr folded(g_utf8_casefold(text.data(), static_cast<gssize>(text.size())));
     return folded.get();
 }
 
@@ -60,8 +58,7 @@ std::string format_command_line(std::string_view arguments)
     {
         const auto end = arguments.find('\0');
         const auto arg = arguments.substr(0, end);
-        const std::unique_ptr<char, decltype(&g_free)> valid(
-            g_utf8_make_valid(arg.data(), static_cast<gssize>(arg.size())), g_free);
+        const GStringPtr valid(g_utf8_make_valid(arg.data(), static_cast<gssize>(arg.size())));
         std::string printable;
         for (const unsigned char ch : std::string_view(valid.get()))
         {
@@ -89,8 +86,7 @@ std::string format_command_line(std::string_view arguments)
             command += printable;
         else
         {
-            const std::unique_ptr<char, decltype(&g_free)> quoted(g_shell_quote(printable.c_str()),
-                                                                  g_free);
+            const GStringPtr quoted(g_shell_quote(printable.c_str()));
             command += quoted.get();
         }
         if (end == std::string_view::npos)

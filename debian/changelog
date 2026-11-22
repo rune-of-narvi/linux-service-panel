@@ -1,3 +1,10 @@
+gnome-service-manager (0.4.4) noble; urgency=medium
+
+  * Use RAII and smart pointers for owned GTK, GLib, and backend
+    resources, and simplify ownership transfers in the UI.
+
+ -- Qasim Shafi <qasi123@hotmail.com>  Sun, 22 Nov 2026 23:55:00 +0100
+
 gnome-service-manager (0.4.3) noble; urgency=medium
 
   * Update the Debian package maintainer email address.

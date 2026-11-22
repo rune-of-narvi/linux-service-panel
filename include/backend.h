@@ -1,5 +1,6 @@
 #pragma once
 
+#include "glib_ptr.h"
 #include "systemd.h"
 
 #include <gio/gio.h>
@@ -29,8 +30,8 @@ class Backend
 
   private:
     void close();
-    GSubprocess* process_ = nullptr;
-    GDataInputStream* output_ = nullptr;
+    ObjectPtr<GSubprocess> process_;
+    ObjectPtr<GDataInputStream> output_;
 };
 
 int run_backend();
