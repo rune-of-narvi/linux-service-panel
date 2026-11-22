@@ -10,11 +10,21 @@ Download the amd64 `.deb` from the [latest release](https://github.com/qashoou/g
 Run these commands from the download directory, using the filename you downloaded.
 
 ```sh
-sudo apt install ./gnome-service-manager_0.2.1_amd64.deb
-sudo --preserve-env=WAYLAND_DISPLAY,XDG_RUNTIME_DIR gnome-service-manager
+sudo apt install ./gnome-service-manager_0.3.0_amd64.deb
 ```
 
+Open **GNOME Service Manager** from Ubuntu's app grid or run
+`gnome-service-manager` from a terminal in your GNOME session. Authenticate
+when prompted. To pin it, right-click its icon in the app grid or dock and
+choose **Add to Favorites**.
+
 The package is built on Ubuntu 24.04 for amd64.
+
+## Uninstall
+
+```sh
+sudo apt remove gnome-service-manager
+```
 
 ## Build and launch on Ubuntu
 
@@ -26,13 +36,17 @@ make
 sudo --preserve-env=WAYLAND_DISPLAY,XDG_RUNTIME_DIR ./gnome-service-manager
 ```
 
-Run the launch command from a terminal in your local GNOME Wayland session.
+Run the development build from a terminal in your local GNOME Wayland session.
+Install the Debian package to test the app launcher and elevation prompt.
 On GNOME on Xorg, use
 `sudo --preserve-env=DISPLAY,XAUTHORITY ./gnome-service-manager`.
 
 ## Use
 
 - Search by unit name, configured executable, main PID, or description.
+- Use the **Command Line** button to show the live arguments of each service’s
+  main process. The column is hidden by default and is blank for sockets
+  and services without a readable command line.
 - Click any column header to sort. Click it again to reverse the order.
 - Unit descriptions appear below the name and executable when available.
 - Select a row to start, stop, enable, or disable the unit.

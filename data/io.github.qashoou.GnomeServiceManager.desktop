@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=GNOME Service Manager
+Comment=Manage systemd services and sockets
+Exec=gnome-service-manager
+Icon=utilities-system-monitor
+Terminal=false
+StartupNotify=true
+Categories=System;
+Keywords=systemd;services;sockets;

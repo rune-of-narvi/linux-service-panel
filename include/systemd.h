@@ -14,5 +14,5 @@ enum class Action
     disable
 };
 
-std::vector<UnitRow> list_units();
+std::vector<UnitRow> list_units(bool command_lines);
 std::string change_unit(Action action, const std::string& name);

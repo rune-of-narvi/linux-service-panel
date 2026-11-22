@@ -131,7 +131,7 @@ void read_unit_details(GDBusConnection* bus, UnitEntry& entry)
 
 } // namespace
 
-std::vector<UnitRow> list_units()
+std::vector<UnitRow> list_units(bool command_lines)
 {
     GError* error = nullptr;
     std::unique_ptr<GDBusConnection, ObjectDeleter<GDBusConnection>> bus(
@@ -194,6 +194,18 @@ std::vector<UnitRow> list_units()
         read_unit_details(bus.get(), entry);
         if (entry.row.active.empty())
             entry.row.active = "inactive";
+        if (command_lines && entry.row.pid != 0)
+        {
+            // A service may exit between the MainPID lookup and reading procfs.
+            const auto path = "/proc/" + std::to_string(entry.row.pid) + "/cmdline";
+            gchar* contents = nullptr;
+            gsize size = 0;
+            if (g_file_get_contents(path.c_str(), &contents, &size, nullptr))
+            {
+                const std::unique_ptr<gchar, decltype(&g_free)> owned(contents, g_free);
+                entry.row.command_line = format_command_line({contents, size});
+            }
+        }
         rows.push_back(std::move(entry.row));
     }
     return rows;

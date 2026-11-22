@@ -65,3 +65,17 @@ TEST(UnitRowSearch, EmptyQueryMatchesRowsWithoutAMainPid)
 }
 
 } // namespace
+
+TEST(CommandLine, PreservesWhitespaceAndEmptyArguments)
+{
+    using namespace std::string_view_literals;
+    EXPECT_EQ(format_command_line("/usr/bin/worker\0--label\0one two\0\0"sv),
+              "/usr/bin/worker --label 'one two' ''");
+}
+
+TEST(CommandLine, HandlesMissingDataAndEscapesControlCharacters)
+{
+    using namespace std::string_view_literals;
+    EXPECT_TRUE(format_command_line(""sv).empty());
+    EXPECT_EQ(format_command_line("worker\0line\nbreak"sv), "worker 'line\\x0abreak'");
+}

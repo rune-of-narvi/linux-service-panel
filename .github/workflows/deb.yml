@@ -20,7 +20,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install --no-install-recommends \
-            build-essential debhelper pkg-config libgtk-4-dev libadwaita-1-dev libgtest-dev
+            build-essential debhelper pkg-config libgtk-4-dev libadwaita-1-dev libgtest-dev desktop-file-utils
       - name: Build, install, and check the package
         id: build
         shell: bash
@@ -38,11 +38,16 @@ jobs:
           sudo apt-get install -y "../$package"
           test -x /usr/bin/gnome-service-manager
           test -s /usr/share/doc/gnome-service-manager/copyright
-          if gnome-service-manager > root-check.log 2>&1; then
-            echo "Expected the program to reject a launch without root." >&2
+          desktop-file-validate /usr/share/applications/io.github.qashoou.GnomeServiceManager.desktop
+          test -s /usr/share/polkit-1/actions/io.github.qashoou.GnomeServiceManager.policy
+          if gnome-service-manager --backend > root-check.log 2>&1; then
+            echo "Expected the helper to reject a launch without root." >&2
             exit 1
           fi
-          grep -F 'Service Manager requires root' root-check.log
+          grep -F 'Service Manager helper requires root' root-check.log
+          printf '00\n' | sudo /usr/bin/gnome-service-manager --backend > backend-check.log
+          grep -qx 'READY' backend-check.log
+          grep -q '^(true, ' backend-check.log
 
           echo "version=$version" >> "$GITHUB_OUTPUT"
           mkdir -p dist

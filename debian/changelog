@@ -1,3 +1,13 @@
+gnome-service-manager (0.3.0) noble; urgency=medium
+
+  * Add an optional Command Line column for running services.
+  * Add an Ubuntu app launcher that can be pinned to the GNOME dock.
+  * Request administrator authentication when launched from a regular
+    user session. The graphical interface stays in the user's session.
+  * Document how to uninstall the Debian package.
+
+ -- Qasim Shafi <5079901+qashoou@users.noreply.github.com>  Sun, 22 Nov 2026 21:15:00 +0100
+
 gnome-service-manager (0.2.1) noble; urgency=medium
 
   * Add a project clang-format configuration and put opening braces on

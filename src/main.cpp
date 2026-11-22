@@ -1,10 +1,9 @@
-#include "systemd.h"
+#include "backend.h"
 
 #include <adwaita.h>
 #include <unistd.h>
 
 #include <array>
-#include <cstdio>
 #include <exception>
 #include <memory>
 #include <string_view>
@@ -24,19 +23,12 @@ struct View
     GtkWidget* refresh;
     std::array<GtkWidget*, 4> actions;
     std::string query;
+    Backend backend;
+    std::unique_ptr<GCancellable, decltype(&g_object_unref)> cancellation{g_cancellable_new(),
+                                                                          g_object_unref};
+    GtkColumnViewColumn* command_line_column;
+    GtkWidget* command_line_toggle;
     bool busy = false;
-};
-
-struct Request
-{
-    Action action;
-    std::string unit;
-};
-
-struct Result
-{
-    std::vector<UnitRow> rows;
-    std::string action_message;
 };
 
 constexpr std::array actions{Action::start, Action::stop, Action::enable, Action::disable};
@@ -61,6 +53,7 @@ void update_buttons(View& view)
     const std::string_view active = row ? std::string_view(row->active) : "";
     const std::string_view startup = row ? std::string_view(row->startup) : "";
     gtk_widget_set_sensitive(view.refresh, !view.busy);
+    gtk_widget_set_sensitive(view.command_line_toggle, !view.busy);
     gtk_widget_set_sensitive(view.actions[0], selected && !startup.starts_with("masked") &&
                                                   active != "active" && active != "activating");
     gtk_widget_set_sensitive(
@@ -81,7 +74,7 @@ GtkWidget* make_cell_label()
     return label;
 }
 
-void append_column(GtkColumnView* view, const char* title, Column type)
+GtkColumnViewColumn* append_column(GtkColumnView* view, const char* title, Column type)
 {
     const auto column_type = GINT_TO_POINTER(static_cast<int>(type));
     auto* factory = gtk_signal_list_item_factory_new();
@@ -130,6 +123,9 @@ void append_column(GtkColumnView* view, const char* title, Column type)
                                text += "\n" + row.description;
                            gtk_widget_set_tooltip_text(cell, text.c_str());
                            return;
+                       case Column::command_line:
+                           text = row.command_line.empty() ? "—" : row.command_line;
+                           break;
                        case Column::startup:
                            text = row.startup;
                            break;
@@ -158,7 +154,10 @@ void append_column(GtkColumnView* view, const char* title, Column type)
     gtk_column_view_append_column(view, column);
     if (type == Column::name)
         gtk_column_view_sort_by_column(view, column, GTK_SORT_ASCENDING);
+    if (type == Column::command_line)
+        gtk_column_view_column_set_fixed_width(column, 360);
     g_object_unref(column);
+    return column;
 }
 
 void replace_rows(View& view, std::vector<UnitRow>& rows, const std::string& selected)
@@ -213,7 +212,7 @@ void run(View& view, Action action)
     auto* app = gtk_window_get_application(view.window);
     g_application_hold(G_APPLICATION(app));
     auto* task = g_task_new(
-        view.window, nullptr,
+        view.window, view.cancellation.get(),
         +[](GObject* source, GAsyncResult* done, gpointer application)
         {
             auto& view = *static_cast<View*>(g_object_get_data(source, "view"));
@@ -251,7 +250,10 @@ void run(View& view, Action action)
         },
         app);
     g_task_set_task_data(
-        task, new Request{action, row ? row->name : ""},
+        task,
+        new Request{action, row ? row->name : "",
+                    gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(view.command_line_toggle)) !=
+                        FALSE},
         +[](gpointer data)
         {
             delete static_cast<Request*>(data);
@@ -259,21 +261,13 @@ void run(View& view, Action action)
     // Perform blocking systemd calls in a worker. Only the completion callback updates GTK.
     g_task_run_in_thread(
         task,
-        +[](GTask* task, gpointer, gpointer data, GCancellable*)
+        +[](GTask* task, gpointer source, gpointer data, GCancellable* cancellation)
         {
             const auto& request = *static_cast<Request*>(data);
-            auto result = std::make_unique<Result>();
+            auto& view = *static_cast<View*>(g_object_get_data(G_OBJECT(source), "view"));
             try
             {
-                result->action_message = change_unit(request.action, request.unit);
-            }
-            catch (const std::exception& error)
-            {
-                result->action_message = error.what();
-            }
-            try
-            {
-                result->rows = list_units();
+                auto result = std::make_unique<Result>(view.backend.run(request, cancellation));
                 g_task_return_pointer(
                     task, result.release(),
                     +[](gpointer data)
@@ -283,11 +277,7 @@ void run(View& view, Action action)
             }
             catch (const std::exception& error)
             {
-                std::string message = "Could not refresh units. ";
-                message += error.what();
-                if (!result->action_message.empty())
-                    message = result->action_message + "\n" + message;
-                g_task_return_new_error(task, G_IO_ERROR, G_IO_ERROR_FAILED, "%s", message.c_str());
+                g_task_return_new_error(task, G_IO_ERROR, G_IO_ERROR_FAILED, "%s", error.what());
             }
         });
     g_object_unref(task);
@@ -312,6 +302,15 @@ void activate(GApplication* app, gpointer)
         {
             delete static_cast<View*>(data);
         });
+
+    g_signal_connect(window, "close-request",
+                     G_CALLBACK(+[](GtkWindow*, gpointer data) -> gboolean
+                                {
+                                    g_cancellable_cancel(
+                                        static_cast<View*>(data)->cancellation.get());
+                                    return FALSE;
+                                }),
+                     view);
 
     auto* content = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
     adw_application_window_set_content(ADW_APPLICATION_WINDOW(window), content);
@@ -369,6 +368,22 @@ void activate(GApplication* app, gpointer)
     append_column(columns, "Name / Executable", Column::name);
     append_column(columns, "Enabled", Column::startup);
     append_column(columns, "Run Status", Column::status);
+    view->command_line_column = append_column(columns, "Command Line", Column::command_line);
+    gtk_column_view_column_set_visible(view->command_line_column, false);
+
+    view->command_line_toggle = gtk_toggle_button_new_with_label("Command Line");
+    gtk_widget_set_tooltip_text(view->command_line_toggle, "Show arguments of running services");
+    adw_header_bar_pack_end(header, view->command_line_toggle);
+    g_signal_connect_swapped(view->command_line_toggle, "toggled",
+                             G_CALLBACK(+[](View* view)
+                                        {
+                                            gtk_column_view_column_set_visible(
+                                                view->command_line_column,
+                                                gtk_toggle_button_get_active(
+                                                    GTK_TOGGLE_BUTTON(view->command_line_toggle)));
+                                            run(*view, Action::refresh);
+                                        }),
+                             view);
 
     auto* scroller = gtk_scrolled_window_new();
     gtk_widget_set_vexpand(scroller, true);
@@ -414,14 +429,12 @@ void activate(GApplication* app, gpointer)
 
 int main(int argc, char** argv)
 {
-    if (geteuid() != 0)
-    {
-        std::fputs("Service Manager requires root. Launch it with sudo from your GNOME terminal.\n",
-                   stderr);
-        return 1;
-    }
+    if (argc == 2 && std::string_view(argv[1]) == "--backend")
+        return run_backend();
 
-    auto* app = adw_application_new("local.ServiceManager", G_APPLICATION_NON_UNIQUE);
+    auto* app = adw_application_new("io.github.qashoou.GnomeServiceManager",
+                                    geteuid() == 0 ? G_APPLICATION_NON_UNIQUE
+                                                   : G_APPLICATION_DEFAULT_FLAGS);
     g_signal_connect(app, "activate", G_CALLBACK(activate), nullptr);
     const int status = g_application_run(G_APPLICATION(app), argc, argv);
     g_object_unref(app);

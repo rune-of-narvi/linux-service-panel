@@ -10,7 +10,7 @@ Homepage: https://github.com/qashoou/gnome-service-manager
 
 Package: gnome-service-manager
 Architecture: any
-Depends: ${shlibs:Depends}, ${misc:Depends}, systemd, sudo
+Depends: ${shlibs:Depends}, ${misc:Depends}, systemd, pkexec
 Description: systemd service and socket manager for Ubuntu GNOME
  View system services and sockets, their configured executables, process IDs,
  startup settings, and current state. Start, stop, enable, and disable units

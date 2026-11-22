@@ -5,3 +5,5 @@
 
 override_dh_auto_install:
 	install -D -m 0755 gnome-service-manager debian/gnome-service-manager/usr/bin/gnome-service-manager
+	install -D -m 0644 data/io.github.qashoou.GnomeServiceManager.desktop debian/gnome-service-manager/usr/share/applications/io.github.qashoou.GnomeServiceManager.desktop
+	install -D -m 0644 data/io.github.qashoou.GnomeServiceManager.policy debian/gnome-service-manager/usr/share/polkit-1/actions/io.github.qashoou.GnomeServiceManager.policy
