@@ -48,6 +48,9 @@ jobs:
           mkdir -p dist
           cp "../$package" dist/
           (cd dist && sha256sum "$package" > "$package.sha256")
+          dpkg-parsechangelog --show-field Changes |
+            sed -e '1,3d' -e 's/^  \* /- /' -e 's/^    /  /' -e 's/^\.$//' > dist/release-notes.md
+          grep -q '^- ' dist/release-notes.md
       - uses: actions/upload-artifact@v4
         with:
           name: ubuntu-24.04-amd64
@@ -55,13 +58,9 @@ jobs:
           if-no-files-found: error
 
   release:
-    # Publish the initial release from main. Later releases require a version tag.
-    if: >-
-      github.event_name == 'push' &&
-      (startsWith(github.ref, 'refs/tags/v') ||
-      (github.ref == 'refs/heads/main' && needs.package.outputs.version == '0.1.0'))
+    if: github.event_name == 'push'
     concurrency:
-      group: release-${{ needs.package.outputs.version }}
+      group: publish-release
     needs: package
     runs-on: ubuntu-24.04
     permissions:
@@ -75,14 +74,27 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           VERSION: ${{ needs.package.outputs.version }}
+        shell: bash
         run: |
           tag="v$VERSION"
           if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             exit 0
           fi
+
+          latest=$(gh release view --repo "$GITHUB_REPOSITORY" --json tagName --jq .tagName)
+          if [[ ! "$latest" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.0$ ]]; then
+            echo "Expected the latest release to have a vMAJOR.MINOR.0 tag, got $latest." >&2
+            exit 1
+          fi
+          expected="v${BASH_REMATCH[1]}.$((BASH_REMATCH[2] + 1)).0"
+          if [[ "$tag" != "$expected" ]]; then
+            echo "Expected the next minor release to be $expected, got $tag." >&2
+            exit 1
+          fi
+
           args=(--target "$GITHUB_SHA")
           if [[ "$GITHUB_REF_TYPE" == "tag" ]]; then
             args=(--verify-tag)
           fi
-          gh release create "$tag" dist/* --repo "$GITHUB_REPOSITORY" \
-            "${args[@]}" --title "$tag" --generate-notes
+          gh release create "$tag" dist/*.deb dist/*.sha256 --repo "$GITHUB_REPOSITORY" \
+            "${args[@]}" --title "$tag" --notes-file dist/release-notes.md

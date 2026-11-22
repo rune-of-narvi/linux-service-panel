@@ -6,15 +6,15 @@ systemd D-Bus API and uses systemctl to carry out actions.
 
 ## Install the package on Ubuntu
 
-Download the `.deb` for your architecture from the [latest release](https://github.com/qashoou/gnome-service-manager/releases/latest), then run
-the commands below from the directory where you saved it.
+Download the amd64 `.deb` from the [latest release](https://github.com/qashoou/gnome-service-manager/releases/latest).
+Run these commands from the download directory, using the filename you downloaded.
 
 ```sh
-sudo apt install ./gnome-service-manager_0.1.0_amd64.deb
+sudo apt install ./gnome-service-manager_0.2.0_amd64.deb
 sudo --preserve-env=WAYLAND_DISPLAY,XDG_RUNTIME_DIR gnome-service-manager
 ```
 
-The first package is built on Ubuntu 24.04 for amd64.
+The package is built on Ubuntu 24.04 for amd64.
 
 ## Build and launch on Ubuntu
 
@@ -54,6 +54,13 @@ dpkg-buildpackage --build=binary --unsigned-changes --unsigned-source
 ```
 
 The `.deb` is written to the parent directory.
+
+## Releases
+
+To publish a release, add a new entry to `debian/changelog` with the next
+minor version and the changes since the previous release. A successful
+build on `main` publishes the package, checksum, and notes from that entry
+on GitHub. The workflow checks that the version advances by one minor.
 
 ## License
 

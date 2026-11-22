@@ -1,3 +1,14 @@
+gnome-service-manager (0.2.0) noble; urgency=medium
+
+  * Sort by any of the four table columns. Click a column header again to
+    reverse the order. PIDs sort numerically.
+  * Search for services and sockets by unit name, executable, main PID,
+    or description.
+  * Show the systemd description below the unit name when one is available.
+  * Organize C++ sources in src/ and headers in include/.
+
+ -- Qasim Shafi <5079901+qashoou@users.noreply.github.com>  Sun, 22 Nov 2026 19:30:00 +0100
+
 gnome-service-manager (0.1.0) noble; urgency=medium
 
   * Initial release for Ubuntu GNOME.
