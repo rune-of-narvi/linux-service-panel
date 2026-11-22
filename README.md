@@ -1,5 +1,14 @@
 # Service Manager
 
+[![Ubuntu 24.04 package CI](https://github.com/qashoou/gnome-service-manager/actions/workflows/deb.yml/badge.svg?branch=main&event=push)](https://github.com/qashoou/gnome-service-manager/actions/workflows/deb.yml)
+[![Ubuntu 26.04 build and test CI](https://github.com/qashoou/gnome-service-manager/actions/workflows/ubuntu-26.yml/badge.svg?branch=main&event=push)](https://github.com/qashoou/gnome-service-manager/actions/workflows/ubuntu-26.yml)
+[![Latest release](https://img.shields.io/github/v/release/qashoou/gnome-service-manager?label=release&logo=github)](https://github.com/qashoou/gnome-service-manager/releases/latest)
+[![MIT license](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
+
+[![Arch Linux packaging: not supported](https://img.shields.io/badge/Arch_Linux-not_supported-yellow?logo=archlinux)](https://github.com/qashoou/gnome-service-manager/issues/1)
+[![Debian packaging: not supported](https://img.shields.io/badge/Debian-not_supported-yellow?logo=debian)](https://github.com/qashoou/gnome-service-manager/issues/2)
+[![Fedora packaging: not supported](https://img.shields.io/badge/Fedora-not_supported-yellow?logo=fedora)](https://github.com/qashoou/gnome-service-manager/issues/3)
+
 A native C++23 app for Ubuntu GNOME using GTK 4 and libadwaita. It lists
 system services and sockets. It reads the list and state from the local
 systemd D-Bus API and uses systemctl to carry out actions.
@@ -21,7 +30,8 @@ Open **GNOME Service Manager** from Ubuntu's app grid or run
 when prompted. To pin it, right-click its icon in the app grid or dock and
 choose **Add to Favorites**.
 
-The package is built on Ubuntu 24.04 for amd64.
+The amd64 release package is built and tested on Ubuntu 24.04. The Ubuntu
+26.04 workflow builds the source and runs the unit tests.
 
 ## Uninstall
 
