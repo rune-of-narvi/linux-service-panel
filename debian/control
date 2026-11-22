@@ -2,7 +2,8 @@ Source: gnome-service-manager
 Section: admin
 Priority: optional
 Maintainer: Qasim Shafi <5079901+qashoou@users.noreply.github.com>
-Build-Depends: debhelper-compat (= 13), g++ (>= 13), pkg-config, libgtk-4-dev, libadwaita-1-dev
+Build-Depends: debhelper-compat (= 13), g++ (>= 13), pkg-config, libgtk-4-dev, libadwaita-1-dev,
+ libgtest-dev <!nocheck>
 Standards-Version: 4.7.0
 Rules-Requires-Root: no
 Homepage: https://github.com/qashoou/gnome-service-manager

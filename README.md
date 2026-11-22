@@ -10,7 +10,7 @@ Download the amd64 `.deb` from the [latest release](https://github.com/qashoou/g
 Run these commands from the download directory, using the filename you downloaded.
 
 ```sh
-sudo apt install ./gnome-service-manager_0.2.0_amd64.deb
+sudo apt install ./gnome-service-manager_0.2.1_amd64.deb
 sudo --preserve-env=WAYLAND_DISPLAY,XDG_RUNTIME_DIR gnome-service-manager
 ```
 
@@ -49,18 +49,27 @@ On GNOME on Xorg, use
 From the source directory on Ubuntu, run:
 
 ```sh
-sudo apt install build-essential debhelper pkg-config libgtk-4-dev libadwaita-1-dev
+sudo apt install build-essential debhelper pkg-config libgtk-4-dev libadwaita-1-dev libgtest-dev
 dpkg-buildpackage --build=binary --unsigned-changes --unsigned-source
 ```
 
 The `.deb` is written to the parent directory.
 
+## Unit tests and formatting
+
+Install `libgtest-dev` alongside the build dependencies and run `make test`.
+The tests run without sudo, a graphical session, or a systemd connection.
+Debian package builds run the same suite.
+
+Run `clang-format -i include/*.h src/*.cpp tests/*.cpp` to apply the project's
+formatting rules.
+
 ## Releases
 
-To publish a release, add a new entry to `debian/changelog` with the next
-minor version and the changes since the previous release. A successful
-build on `main` publishes the package, checksum, and notes from that entry
-on GitHub. The workflow checks that the version advances by one minor.
+To publish a release, add an entry to `debian/changelog` with the changes
+since the previous release and the next patch or minor version. A minor
+release resets the patch number to zero. A successful build on `main`
+publishes the package, checksum, and notes from that entry on GitHub.
 
 ## License
 

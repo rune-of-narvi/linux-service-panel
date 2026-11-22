@@ -1,3 +1,14 @@
+gnome-service-manager (0.2.1) noble; urgency=medium
+
+  * Add a project clang-format configuration and put opening braces on
+    the next line throughout the C++ sources.
+  * Document how the app loads systemd units, filters and sorts rows,
+    and runs service actions in the background.
+  * Add five GoogleTest cases covering sorting and search. Run them with
+    make test or as part of the Debian package build.
+
+ -- Qasim Shafi <5079901+qashoou@users.noreply.github.com>  Sun, 22 Nov 2026 19:40:00 +0100
+
 gnome-service-manager (0.2.0) noble; urgency=medium
 
   * Sort by any of the four table columns. Click a column header again to
