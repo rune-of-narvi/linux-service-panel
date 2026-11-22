@@ -1,0 +1,88 @@
+name: Build Ubuntu package
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    runs-on: ubuntu-24.04
+    outputs:
+      version: ${{ steps.build.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install packaging and build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends \
+            build-essential debhelper pkg-config libgtk-4-dev libadwaita-1-dev
+      - name: Build, install, and check the package
+        id: build
+        shell: bash
+        run: |
+          version=$(dpkg-parsechangelog --show-field Version)
+          if [[ "$GITHUB_REF_TYPE" == "tag" && "$GITHUB_REF_NAME" != "v$version" ]]; then
+            echo "The release tag must match debian/changelog (v$version)." >&2
+            exit 1
+          fi
+
+          dpkg-buildpackage --build=binary --unsigned-changes --unsigned-source
+          arch=$(dpkg --print-architecture)
+          package="gnome-service-manager_${version}_${arch}.deb"
+          dpkg-deb --info "../$package"
+          sudo apt-get install -y "../$package"
+          test -x /usr/bin/gnome-service-manager
+          test -s /usr/share/doc/gnome-service-manager/copyright
+          if gnome-service-manager > root-check.log 2>&1; then
+            echo "Expected the program to reject a launch without root." >&2
+            exit 1
+          fi
+          grep -F 'Service Manager requires root' root-check.log
+
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          mkdir -p dist
+          cp "../$package" dist/
+          (cd dist && sha256sum "$package" > "$package.sha256")
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ubuntu-24.04-amd64
+          path: dist/
+          if-no-files-found: error
+
+  release:
+    # Publish the initial release from main. Later releases require a version tag.
+    if: >-
+      github.event_name == 'push' &&
+      (startsWith(github.ref, 'refs/tags/v') ||
+      (github.ref == 'refs/heads/main' && needs.package.outputs.version == '0.1.0'))
+    concurrency:
+      group: release-${{ needs.package.outputs.version }}
+    needs: package
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: ubuntu-24.04-amd64
+          path: dist/
+      - name: Publish GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.package.outputs.version }}
+        run: |
+          tag="v$VERSION"
+          if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            exit 0
+          fi
+          args=(--target "$GITHUB_SHA")
+          if [[ "$GITHUB_REF_TYPE" == "tag" ]]; then
+            args=(--verify-tag)
+          fi
+          gh release create "$tag" dist/* --repo "$GITHUB_REPOSITORY" \
+            "${args[@]}" --title "$tag" --generate-notes

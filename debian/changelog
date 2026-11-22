@@ -1,0 +1,5 @@
+gnome-service-manager (0.1.0) noble; urgency=medium
+
+  * Initial release for Ubuntu GNOME.
+
+ -- Qasim Shafi <5079901+qashoou@users.noreply.github.com>  Sun, 22 Nov 2026 19:00:00 +0100
