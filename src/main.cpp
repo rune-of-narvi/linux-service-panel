@@ -13,6 +13,7 @@
 namespace
 {
 
+// Window-owned state shared by GTK callbacks and the request worker.
 struct View
 {
     GtkWindow* window;
@@ -36,6 +37,7 @@ struct View
 
 constexpr std::array actions{Action::start, Action::stop, Action::enable, Action::disable};
 
+// Each list item carries the full unit data used by sorting, filtering, and actions.
 const UnitRow* get_row(gconstpointer object)
 {
     return static_cast<UnitRow*>(
@@ -80,6 +82,7 @@ GtkWidget* make_cell_label()
 GtkColumnViewColumn* append_column(GtkColumnView* view, const char* title, Column type)
 {
     const auto column_type = GINT_TO_POINTER(static_cast<int>(type));
+    // GTK reuses cells as the list scrolls. Setup creates widgets and bind fills each row.
     auto* factory = gtk_signal_list_item_factory_new();
     g_signal_connect(factory, "setup",
                      G_CALLBACK(+[](GtkSignalListItemFactory*, GtkListItem* item, gpointer data)
@@ -228,6 +231,7 @@ void run(View& view, Action action)
             std::unique_ptr<Result> result(
                 static_cast<Result*>(g_task_propagate_pointer(G_TASK(done), &error)));
             auto* request = static_cast<Request*>(g_task_get_task_data(G_TASK(done)));
+            // The task can finish after the window was closed. Skip updates in that case.
             if (!gtk_window_get_application(view.window))
             {
                 g_clear_error(&error);
@@ -254,6 +258,7 @@ void run(View& view, Action action)
             g_application_release(G_APPLICATION(application));
         },
         app);
+    // Capture the selected unit name on the UI thread before handing the request to the worker.
     g_task_set_task_data(
         task,
         new Request{action, row ? row->name : "",
@@ -290,6 +295,7 @@ void run(View& view, Action action)
 
 void activate(GApplication* app, gpointer)
 {
+    // Activating the launcher again brings the existing window to the foreground.
     if (auto* existing = gtk_application_get_active_window(GTK_APPLICATION(app)))
     {
         gtk_window_present(existing);
@@ -460,6 +466,7 @@ void activate(GApplication* app, gpointer)
 
 int main(int argc, char** argv)
 {
+    // The elevated helper handles requests without starting a GTK session.
     if (argc == 2 && std::string_view(argv[1]) == "--backend")
         return run_backend();
 

@@ -1,3 +1,10 @@
+gnome-service-manager (0.4.3) noble; urgency=medium
+
+  * Update the Debian package maintainer email address.
+  * Document the application design and explain the main GTK code paths.
+
+ -- Qasim Shafi <qasi123@hotmail.com>  Sun, 22 Nov 2026 23:25:00 +0100
+
 gnome-service-manager (0.4.2) noble; urgency=medium
 
   * Use a project-specific application ID without a personal username.

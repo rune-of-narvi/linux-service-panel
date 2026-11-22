@@ -85,6 +85,8 @@ Debian package builds run the same suite.
 Run `clang-format -i include/*.h src/*.cpp tests/*.cpp` to apply the project's
 formatting rules.
 
+See the [design document](docs/design.md) for the application architecture and request flow.
+
 ## Releases
 
 To publish a release, add an entry to `debian/changelog` with the changes
