@@ -1,4 +1,4 @@
-Source: gnome-service-manager
+Source: service-panel
 Section: admin
 Priority: optional
 Maintainer: Qasim Shafi <qasi123@hotmail.com>
@@ -6,12 +6,14 @@ Build-Depends: debhelper-compat (= 13), g++ (>= 13), pkg-config, libgtk-4-dev, l
  libgtest-dev <!nocheck>
 Standards-Version: 4.7.0
 Rules-Requires-Root: no
-Homepage: https://github.com/qashoou/gnome-service-manager
+Homepage: https://github.com/rune-of-narvi/gnome-service-manager
 
-Package: gnome-service-manager
+Package: service-panel
 Architecture: any
 Depends: ${shlibs:Depends}, ${misc:Depends}, systemd, pkexec
-Description: systemd service and socket manager for Ubuntu GNOME
+Conflicts: gnome-service-manager
+Replaces: gnome-service-manager
+Description: systemd service and socket manager for Linux desktops
  View system services and sockets, their configured executables, process IDs,
  startup settings, and current state. Start, stop, enable, and disable units
  from a native GTK interface.

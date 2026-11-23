@@ -4,6 +4,6 @@
 	dh $@
 
 override_dh_auto_install:
-	install -D -m 0755 gnome-service-manager debian/gnome-service-manager/usr/bin/gnome-service-manager
-	install -D -m 0644 data/local.GnomeServiceManager.desktop debian/gnome-service-manager/usr/share/applications/local.GnomeServiceManager.desktop
-	install -D -m 0644 data/local.GnomeServiceManager.policy debian/gnome-service-manager/usr/share/polkit-1/actions/local.GnomeServiceManager.policy
+	install -D -m 0755 service-panel debian/service-panel/usr/bin/service-panel
+	install -D -m 0644 data/local.ServicePanel.desktop debian/service-panel/usr/share/applications/local.ServicePanel.desktop
+	install -D -m 0644 data/local.ServicePanel.policy debian/service-panel/usr/share/polkit-1/actions/local.ServicePanel.policy

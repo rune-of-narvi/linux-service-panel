@@ -19,4 +19,4 @@ jobs:
           sudo apt-get install --no-install-recommends \
             build-essential pkg-config libgtk-4-dev libadwaita-1-dev libgtest-dev
       - name: Build and run tests
-        run: make -j2 gnome-service-manager test
+        run: make -j2 service-panel test

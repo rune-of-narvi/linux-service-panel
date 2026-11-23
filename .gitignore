@@ -1,10 +1,10 @@
 /src/*.o
 /tests/*.o
 /tests/unit_row_test
-/gnome-service-manager
+/service-panel
 /debian/.debhelper/
 /debian/debhelper-build-stamp
-/debian/gnome-service-manager/
+/debian/service-panel/
 /debian/*.debhelper.log
 /debian/*.substvars
 /debian/files

@@ -2,16 +2,16 @@
 <!DOCTYPE policyconfig PUBLIC "-//freedesktop//DTD PolicyKit Policy Configuration 1.0//EN"
  "http://www.freedesktop.org/standards/PolicyKit/1/policyconfig.dtd">
 <policyconfig>
-  <action id="local.GnomeServiceManager.manage">
+  <action id="local.ServicePanel.manage">
     <description>Manage system services and sockets</description>
-    <message>Authentication is required to open GNOME Service Manager</message>
+    <message>Authentication is required to open Service Panel</message>
     <icon_name>utilities-system-monitor</icon_name>
     <defaults>
       <allow_any>no</allow_any>
       <allow_inactive>no</allow_inactive>
       <allow_active>auth_admin</allow_active>
     </defaults>
-    <annotate key="org.freedesktop.policykit.exec.path">/usr/bin/gnome-service-manager</annotate>
+    <annotate key="org.freedesktop.policykit.exec.path">/usr/bin/service-panel</annotate>
     <annotate key="org.freedesktop.policykit.exec.argv1">--backend</annotate>
   </action>
 </policyconfig>

@@ -9,7 +9,7 @@ objects = src/main.o src/backend.o src/systemd.o src/unit_row.o
 test_objects = tests/unit_row_test.o src/unit_row.o
 test_binary = tests/unit_row_test
 
-gnome-service-manager: $(objects)
+service-panel: $(objects)
 	$(CXX) $(LDFLAGS) $^ $(gtk_libs) $(LDLIBS) -o $@
 
 src/main.o src/backend.o: include/backend.h
@@ -26,4 +26,4 @@ test: $(test_binary)
 	./$(test_binary)
 
 clean:
-	rm -f gnome-service-manager $(objects) tests/unit_row_test.o $(test_binary)
+	rm -f service-panel $(objects) tests/unit_row_test.o $(test_binary)

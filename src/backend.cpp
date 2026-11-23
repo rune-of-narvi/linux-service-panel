@@ -76,7 +76,7 @@ int run_backend()
 {
     if (geteuid() != 0)
     {
-        std::fputs("Service Manager helper requires root.\n", stderr);
+        std::fputs("Service Panel helper requires root.\n", stderr);
         return 1;
     }
 
@@ -136,7 +136,7 @@ Result Backend::run(const Request& request, GCancellable* cancellation)
                                                            G_SUBPROCESS_FLAGS_STDOUT_PIPE |
                                                            G_SUBPROCESS_FLAGS_STDERR_SILENCE),
                              &error, "/usr/bin/pkexec", "--disable-internal-agent",
-                             "/usr/bin/gnome-service-manager", "--backend", nullptr));
+                             "/usr/bin/service-panel", "--backend", nullptr));
         if (!process_)
             throw_io_error(error);
         output_.reset(g_data_input_stream_new(g_subprocess_get_stdout_pipe(process_.get())));

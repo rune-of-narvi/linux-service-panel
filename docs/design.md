@@ -1,6 +1,6 @@
-# GNOME Service Manager design
+# Service Panel design
 
-GNOME Service Manager is a C++23 application for inspecting and controlling
+Service Panel is a C++23 application for inspecting and controlling
 system-wide systemd services and sockets from a GTK 4 and libadwaita window.
 
 ## Components

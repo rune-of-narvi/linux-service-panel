@@ -1,8 +1,8 @@
 [Desktop Entry]
 Type=Application
-Name=GNOME Service Manager
+Name=Service Panel
 Comment=Manage systemd services and sockets
-Exec=gnome-service-manager
+Exec=service-panel
 Icon=utilities-system-monitor
 Terminal=false
 StartupNotify=true

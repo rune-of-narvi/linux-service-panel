@@ -285,7 +285,7 @@ void activate(GApplication* app, gpointer)
     }
 
     auto* window = GTK_WINDOW(adw_application_window_new(GTK_APPLICATION(app)));
-    gtk_window_set_title(window, "Service Manager");
+    gtk_window_set_title(window, "Service Panel");
     gtk_window_set_default_size(window, 940, 640);
     auto state = std::make_unique<View>();
     auto* view = state.get();
@@ -446,9 +446,9 @@ int main(int argc, char** argv)
     if (argc == 2 && std::string_view(argv[1]) == "--backend")
         return run_backend();
 
-    const ObjectPtr<AdwApplication> app(adw_application_new(
-        "local.GnomeServiceManager",
-        geteuid() == 0 ? G_APPLICATION_NON_UNIQUE : G_APPLICATION_DEFAULT_FLAGS));
+    const ObjectPtr<AdwApplication> app(
+        adw_application_new("local.ServicePanel", geteuid() == 0 ? G_APPLICATION_NON_UNIQUE
+                                                                 : G_APPLICATION_DEFAULT_FLAGS));
     g_signal_connect(app.get(), "activate", G_CALLBACK(activate), nullptr);
     return g_application_run(G_APPLICATION(app.get()), argc, argv);
 }

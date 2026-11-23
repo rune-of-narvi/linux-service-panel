@@ -33,26 +33,35 @@ jobs:
 
           dpkg-buildpackage --build=binary --unsigned-changes --unsigned-source
           arch=$(dpkg --print-architecture)
-          package="gnome-service-manager_${version}_${arch}.deb"
+          package="service-panel_${version}_${arch}.deb"
           dpkg-deb --info "../$package"
+          if [[ "$version" == "0.5.0" ]]; then
+            # Check the package-name migration against the last release under the old name.
+            old_package="gnome-service-manager_0.4.4_${arch}.deb"
+            curl -fsSL "https://github.com/${GITHUB_REPOSITORY}/releases/download/v0.4.4/$old_package" \
+              -o "$RUNNER_TEMP/$old_package"
+            sudo apt-get install -y "$RUNNER_TEMP/$old_package"
+          fi
           sudo apt-get install -y "../$package"
-          test -x /usr/bin/gnome-service-manager
-          test -s /usr/share/doc/gnome-service-manager/copyright
-          desktop-file-validate /usr/share/applications/local.GnomeServiceManager.desktop
-          test -s /usr/share/polkit-1/actions/local.GnomeServiceManager.policy
-          if gnome-service-manager --backend > root-check.log 2>&1; then
+          test -x /usr/bin/service-panel
+          test ! -e /usr/bin/gnome-service-manager
+          test ! -e /usr/share/applications/local.GnomeServiceManager.desktop
+          test -s /usr/share/doc/service-panel/copyright
+          desktop-file-validate /usr/share/applications/local.ServicePanel.desktop
+          test -s /usr/share/polkit-1/actions/local.ServicePanel.policy
+          if service-panel --backend > root-check.log 2>&1; then
             echo "Expected the helper to reject a launch without root." >&2
             exit 1
           fi
-          grep -F 'Service Manager helper requires root' root-check.log
-          printf '00\n' | sudo /usr/bin/gnome-service-manager --backend > backend-check.log
+          grep -F 'Service Panel helper requires root' root-check.log
+          printf '00\n' | sudo /usr/bin/service-panel --backend > backend-check.log
           grep -qx 'READY' backend-check.log
           grep -q '^(true, ' backend-check.log
 
           echo "version=$version" >> "$GITHUB_OUTPUT"
           mkdir -p dist
           cp "../$package" dist/
-          latest_package=gnome-service-manager-latest.deb
+          latest_package=service-panel-latest.deb
           cp "dist/$package" "dist/$latest_package"
           (
             cd dist
