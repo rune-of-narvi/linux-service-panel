@@ -1,6 +1,6 @@
 Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
 Upstream-Name: service-panel
-Source: https://github.com/rune-of-narvi/gnome-service-manager
+Source: https://github.com/rune-of-narvi/linux-service-panel
 
 Files: *
 Copyright: 2026 Qasim Shafi

@@ -6,7 +6,7 @@ Build-Depends: debhelper-compat (= 13), g++ (>= 13), pkg-config, libgtk-4-dev, l
  libgtest-dev <!nocheck>
 Standards-Version: 4.7.0
 Rules-Requires-Root: no
-Homepage: https://github.com/rune-of-narvi/gnome-service-manager
+Homepage: https://github.com/rune-of-narvi/linux-service-panel
 
 Package: service-panel
 Architecture: any

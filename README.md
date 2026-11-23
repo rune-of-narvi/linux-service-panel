@@ -1,13 +1,13 @@
 # Service Panel
 
-[![Ubuntu 24.04 package CI](https://github.com/rune-of-narvi/gnome-service-manager/actions/workflows/deb.yml/badge.svg?branch=main&event=push)](https://github.com/rune-of-narvi/gnome-service-manager/actions/workflows/deb.yml)
-[![Ubuntu 26.04 build and test CI](https://github.com/rune-of-narvi/gnome-service-manager/actions/workflows/ubuntu-26.yml/badge.svg?branch=main&event=push)](https://github.com/rune-of-narvi/gnome-service-manager/actions/workflows/ubuntu-26.yml)
-[![Latest release](https://img.shields.io/github/v/release/rune-of-narvi/gnome-service-manager?label=release&logo=github)](https://github.com/rune-of-narvi/gnome-service-manager/releases/latest)
+[![Ubuntu 24.04 package CI](https://github.com/rune-of-narvi/linux-service-panel/actions/workflows/deb.yml/badge.svg?branch=main&event=push)](https://github.com/rune-of-narvi/linux-service-panel/actions/workflows/deb.yml)
+[![Ubuntu 26.04 build and test CI](https://github.com/rune-of-narvi/linux-service-panel/actions/workflows/ubuntu-26.yml/badge.svg?branch=main&event=push)](https://github.com/rune-of-narvi/linux-service-panel/actions/workflows/ubuntu-26.yml)
+[![Latest release](https://img.shields.io/github/v/release/rune-of-narvi/linux-service-panel?label=release&logo=github)](https://github.com/rune-of-narvi/linux-service-panel/releases/latest)
 [![MIT license](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
-[![Arch Linux packaging: not supported](https://img.shields.io/badge/Arch_Linux-not_supported-yellow?logo=archlinux)](https://github.com/rune-of-narvi/gnome-service-manager/issues/1)
-[![Debian packaging: not supported](https://img.shields.io/badge/Debian-not_supported-yellow?logo=debian)](https://github.com/rune-of-narvi/gnome-service-manager/issues/2)
-[![Fedora packaging: not supported](https://img.shields.io/badge/Fedora-not_supported-yellow?logo=fedora)](https://github.com/rune-of-narvi/gnome-service-manager/issues/3)
+[![Arch Linux packaging: not supported](https://img.shields.io/badge/Arch_Linux-not_supported-yellow?logo=archlinux)](https://github.com/rune-of-narvi/linux-service-panel/issues/1)
+[![Debian packaging: not supported](https://img.shields.io/badge/Debian-not_supported-yellow?logo=debian)](https://github.com/rune-of-narvi/linux-service-panel/issues/2)
+[![Fedora packaging: not supported](https://img.shields.io/badge/Fedora-not_supported-yellow?logo=fedora)](https://github.com/rune-of-narvi/linux-service-panel/issues/3)
 
 View and manage systemd services and sockets on Linux. Service Panel uses
 C++23, GTK 4, and libadwaita. It reads unit state from the local systemd
@@ -15,8 +15,8 @@ D-Bus API and uses systemctl to carry out actions.
 
 ## Install the package on Ubuntu
 
-[Download service-panel-latest.deb](https://github.com/rune-of-narvi/gnome-service-manager/releases/latest/download/service-panel-latest.deb)
-for amd64. [Numbered releases](https://github.com/rune-of-narvi/gnome-service-manager/releases)
+[Download service-panel-latest.deb](https://github.com/rune-of-narvi/linux-service-panel/releases/latest/download/service-panel-latest.deb)
+for amd64. [Numbered releases](https://github.com/rune-of-narvi/linux-service-panel/releases)
 include versioned packages, checksums, and release notes.
 
 Run this command from the download directory.
