@@ -16,6 +16,7 @@ struct Result
 {
     std::vector<UnitRow> rows;
     std::string action_message;
+    bool authorization_cancelled = false;
 };
 
 class Backend

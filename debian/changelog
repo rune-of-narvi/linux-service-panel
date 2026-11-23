@@ -1,3 +1,12 @@
+service-panel (0.5.1) noble; urgency=medium
+
+  * Hide systemd-prefixed units by default and add a Show system services
+    checkbox to reveal them.
+  * Add a Try Again button to reopen the authorization prompt after
+    cancellation.
+
+ -- Qasim Shafi <qasi123@hotmail.com>  Tue, 24 Nov 2026 00:54:00 +0100
+
 service-panel (0.5.0) noble; urgency=medium
 
   * Rename the app, executable, launcher, and authentication policy to

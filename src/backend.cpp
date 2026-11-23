@@ -158,9 +158,9 @@ Result Backend::run(const Request& request, GCancellable* cancellation)
             close();
             if (error)
                 throw_io_error(error);
-            throw std::runtime_error(
-                cancelled ? "Authorization cancelled. Refresh to try again."
-                          : "Could not authorize the installed helper. Refresh to retry.");
+            if (cancelled)
+                return {{}, "Authorization cancelled.", true};
+            throw std::runtime_error("Could not authorize the installed helper.");
         }
     }
 

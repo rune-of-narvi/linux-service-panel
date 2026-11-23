@@ -23,6 +23,8 @@ struct View
     GtkSingleSelection* selection;
     GtkSearchEntry* search;
     GtkLabel* status;
+    GtkWidget* status_box;
+    GtkWidget* retry;
     GtkLabel* counts;
     GtkWidget* refresh;
     std::array<GtkWidget*, 4> actions;
@@ -33,6 +35,7 @@ struct View
     GtkWidget* command_line_toggle;
     bool busy = false;
     bool running_only = false;
+    bool show_system_services = false;
 };
 
 constexpr std::array actions{Action::start, Action::stop, Action::enable, Action::disable};
@@ -200,10 +203,11 @@ void replace_rows(View& view, std::vector<UnitRow>& rows, const std::string& sel
     }
 }
 
-void show_status(View& view, const char* message)
+void show_status(View& view, const char* message, bool can_retry = false)
 {
     gtk_label_set_text(view.status, message);
-    gtk_widget_set_visible(GTK_WIDGET(view.status), *message != '\0');
+    gtk_widget_set_visible(view.retry, can_retry);
+    gtk_widget_set_visible(view.status_box, *message != '\0');
 }
 
 void run(View& view, Action action)
@@ -236,9 +240,11 @@ void run(View& view, Action action)
                 return;
             if (task_error)
                 show_status(view, task_error->message);
+            else if (result->authorization_cancelled)
+                show_status(view, result->action_message.c_str(), true);
             else
             {
-                // Count the full snapshot before search or the running-only filter hides rows.
+                // Count the full snapshot before any display filters hide rows.
                 const auto running = std::ranges::count_if(result->rows, is_running_service);
                 const auto counts = "Total units: " + std::to_string(result->rows.size()) +
                                     "  ·  Running services: " + std::to_string(running);
@@ -319,7 +325,7 @@ void activate(GApplication* app, gpointer)
                                         }),
                              view);
 
-    // Apply search first, then the selected column's sort order, then row selection.
+    // Apply display filters before sorting and selecting rows.
     view->rows = g_list_store_new(GTK_TYPE_STRING_OBJECT);
     view->filter = gtk_custom_filter_new(
         +[](gpointer item, gpointer data) -> gboolean
@@ -327,6 +333,7 @@ void activate(GApplication* app, gpointer)
             const auto& view = *static_cast<View*>(data);
             const auto& row = *get_row(item);
             return (!view.running_only || is_running_service(row)) &&
+                   (view.show_system_services || !is_systemd_unit(row)) &&
                    matches_query(row, view.query);
         },
         view, nullptr);
@@ -383,11 +390,23 @@ void activate(GApplication* app, gpointer)
     gtk_label_set_xalign(view->status, 0.0F);
     gtk_label_set_wrap(view->status, true);
     gtk_label_set_selectable(view->status, true);
-    gtk_widget_set_margin_start(GTK_WIDGET(view->status), 12);
-    gtk_widget_set_margin_end(GTK_WIDGET(view->status), 12);
-    gtk_widget_set_margin_bottom(GTK_WIDGET(view->status), 6);
-    gtk_widget_set_visible(GTK_WIDGET(view->status), false);
-    gtk_box_append(GTK_BOX(content), GTK_WIDGET(view->status));
+    gtk_widget_set_hexpand(GTK_WIDGET(view->status), true);
+    view->status_box = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 8);
+    gtk_widget_set_margin_start(view->status_box, 12);
+    gtk_widget_set_margin_end(view->status_box, 12);
+    gtk_widget_set_margin_bottom(view->status_box, 6);
+    gtk_widget_set_visible(view->status_box, false);
+    gtk_box_append(GTK_BOX(view->status_box), GTK_WIDGET(view->status));
+    view->retry = gtk_button_new_with_label("Try Again");
+    gtk_widget_set_valign(view->retry, GTK_ALIGN_CENTER);
+    gtk_box_append(GTK_BOX(view->status_box), view->retry);
+    gtk_box_append(GTK_BOX(content), view->status_box);
+    g_signal_connect_swapped(view->retry, "clicked",
+                             G_CALLBACK(+[](View* view)
+                                        {
+                                            run(*view, Action::refresh);
+                                        }),
+                             view);
 
     auto* footer = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 8);
     gtk_widget_set_margin_start(footer, 12);
@@ -408,6 +427,21 @@ void activate(GApplication* app, gpointer)
                                                        view.running_only
                                                            ? GTK_FILTER_CHANGE_MORE_STRICT
                                                            : GTK_FILTER_CHANGE_LESS_STRICT);
+                                }),
+                     view);
+
+    auto* show_system = gtk_check_button_new_with_label("Show system services");
+    gtk_widget_set_tooltip_text(show_system, "Show units whose names start with systemd-");
+    gtk_box_append(GTK_BOX(footer), show_system);
+    g_signal_connect(show_system, "toggled",
+                     G_CALLBACK(+[](GtkCheckButton* button, gpointer data)
+                                {
+                                    auto& view = *static_cast<View*>(data);
+                                    view.show_system_services = gtk_check_button_get_active(button);
+                                    gtk_filter_changed(GTK_FILTER(view.filter),
+                                                       view.show_system_services
+                                                           ? GTK_FILTER_CHANGE_LESS_STRICT
+                                                           : GTK_FILTER_CHANGE_MORE_STRICT);
                                 }),
                      view);
 

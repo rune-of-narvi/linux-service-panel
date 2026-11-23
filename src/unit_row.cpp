@@ -50,6 +50,11 @@ bool is_running_service(const UnitRow& row)
     return row.name.ends_with(".service") && row.active == "active" && row.substate == "running";
 }
 
+bool is_systemd_unit(const UnitRow& row)
+{
+    return row.name.starts_with("systemd-");
+}
+
 std::string format_command_line(std::string_view arguments)
 {
     std::string command;

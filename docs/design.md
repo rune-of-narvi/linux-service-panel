@@ -10,7 +10,7 @@ system-wide systemd services and sockets from a GTK 4 and libadwaita window.
 | [`src/main.cpp`](../src/main.cpp) | Creates the window, tracks selection and filters, and sends refresh and action requests without blocking GTK. |
 | [`src/backend.cpp`](../src/backend.cpp) | Starts the privileged helper, sends requests over private pipes, and returns unit snapshots and action messages. |
 | [`src/systemd.cpp`](../src/systemd.cpp) | Reads systemd unit files and runtime state, optionally reads process arguments, and invokes systemctl for mutations. |
-| [`src/unit_row.cpp`](../src/unit_row.cpp) | Implements sorting, search, the running-only predicate, and command-line display formatting. |
+| [`src/unit_row.cpp`](../src/unit_row.cpp) | Implements sorting, search, unit filters, and command-line display formatting. |
 
 ## Privileges and requests
 
@@ -34,8 +34,8 @@ root-launched UI uses the same operations directly.
    The optional Command Line column reads the arguments of each service's
    main PID from procfs when enabled.
 3. The UI replaces its snapshot on the main thread and restores selection
-   by name when that row is visible. Search and the running-only checkbox
-   filter the snapshot before GTK sorts it for display.
+   by name when that row is visible. Search and the two checkboxes filter
+   the snapshot before GTK sorts it for display.
 4. The footer counts the full snapshot before filtering. A service counts
    as running when its active state is `active` and its substate is
    `running`. Socket units contribute to the total unit count.

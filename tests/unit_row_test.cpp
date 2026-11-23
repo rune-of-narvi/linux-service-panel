@@ -88,6 +88,20 @@ TEST(UnitRowFilter, IncludesOnlyRunningServices)
     EXPECT_FALSE(is_running_service(row));
 }
 
+TEST(UnitRowFilter, IdentifiesUnitsBySystemdNamePrefix)
+{
+    UnitRow row;
+    row.name = "systemd-journald.service";
+    EXPECT_TRUE(is_systemd_unit(row));
+    row.name = "systemd-journald.socket";
+    EXPECT_TRUE(is_systemd_unit(row));
+    row.name = "docker.service";
+    row.description = "Managed by systemd";
+    EXPECT_FALSE(is_systemd_unit(row));
+    row.name = "dbus-org.freedesktop.systemd-helper.service";
+    EXPECT_FALSE(is_systemd_unit(row));
+}
+
 } // namespace
 
 TEST(CommandLine, PreservesWhitespaceAndEmptyArguments)

@@ -66,6 +66,8 @@ On GNOME on Xorg, use
 - Search by unit name, configured executable, main PID, or description.
 - Check **Show running services only** at the bottom to filter the list to
   services that systemd reports as running. The checkbox also works with search.
+- Check **Show system services** to reveal units whose names start with
+  `systemd-`. These units are hidden by default.
 - The footer shows the total number of units and the number of running
   services. Both counts use the full list, even when filters are active.
 - Use the **Command Line** button to show the live arguments of each service’s
@@ -76,6 +78,7 @@ On GNOME on Xorg, use
 - Select a row to start, stop, enable, or disable the unit.
 - Start and Stop change the current run state. Enable and Disable change
   startup links. To stop socket activation immediately, stop the socket too.
+- If you cancel the authorization prompt, click **Try Again** to reopen it.
 - Use the refresh button to see changes made outside the app. A service row
   shows its systemd main PID and the first configured ExecStart executable
   when available. Socket rows have no PID or executable of their own.
