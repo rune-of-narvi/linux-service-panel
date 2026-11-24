@@ -39,6 +39,10 @@ root-launched UI uses the same operations directly.
 4. The footer counts the full snapshot before filtering. A service counts
    as running when its active state is `active` and its substate is
    `running`. Socket units contribute to the total unit count.
+5. Once the list is loaded, a separate, read-only worker samples systemd's
+   CPU time and memory counters every two seconds. The UI computes CPU
+   usage from successive samples and updates the existing rows in place.
+   A restarted service needs a fresh CPU baseline.
 
 Start and Stop change live state. Enable and Disable change startup settings.
 The backend refreshes the list after an action and reports failures or
@@ -46,7 +50,7 @@ warnings in the status area.
 
 ## Tests and packaging
 
-Run `make test` to check sorting, search, running-service filtering, and
-command-line formatting. The test executable needs no graphical session or
+Run `make test` to check sorting, search, running-service filtering,
+resource measurements, and display formatting. The test executable needs no graphical session or
 live systemd connection. The Debian package build runs the same tests. CI also validates
 the installed launcher and checks the privileged helper against systemd.

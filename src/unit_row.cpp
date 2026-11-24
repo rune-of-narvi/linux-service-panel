@@ -18,6 +18,12 @@ int compare_rows(const UnitRow& left, const UnitRow& right, Column column)
         return left.startup.compare(right.startup);
     case Column::command_line:
         return left.command_line.compare(right.command_line);
+    case Column::cpu:
+        return (left.usage.cpu_percent > right.usage.cpu_percent) -
+               (left.usage.cpu_percent < right.usage.cpu_percent);
+    case Column::memory:
+        return (left.usage.memory_bytes > right.usage.memory_bytes) -
+               (left.usage.memory_bytes < right.usage.memory_bytes);
     case Column::status:
         // Group by the unit's overall state, then by the detail shown in the same cell.
         const auto order =
@@ -53,6 +59,48 @@ bool is_running_service(const UnitRow& row)
 bool is_systemd_unit(const UnitRow& row)
 {
     return row.name.starts_with("systemd-");
+}
+
+ServiceUsage measure_usage(const ServiceSample& current, const ServiceSample* previous)
+{
+    ServiceUsage usage{std::nullopt, current.memory_bytes};
+    // A fresh invocation or a reset counter needs a new baseline.
+    if (previous && current.started_at == previous->started_at && current.cpu_nanoseconds &&
+        previous->cpu_nanoseconds && *current.cpu_nanoseconds >= *previous->cpu_nanoseconds &&
+        current.sampled_at > previous->sampled_at)
+    {
+        const auto elapsed_us = static_cast<double>(current.sampled_at - previous->sampled_at);
+        const auto cpu_ns =
+            static_cast<double>(*current.cpu_nanoseconds - *previous->cpu_nanoseconds);
+        usage.cpu_percent = cpu_ns / (elapsed_us * 10.0);
+    }
+    return usage;
+}
+
+std::string format_cpu_usage(std::optional<double> percent)
+{
+    if (!percent)
+        return "—";
+    char text[G_ASCII_DTOSTR_BUF_SIZE];
+    return std::string(g_ascii_formatd(text, sizeof(text), "%.1f", *percent)) + "%";
+}
+
+std::string format_memory_usage(std::optional<std::uint64_t> bytes)
+{
+    if (!bytes)
+        return "—";
+    constexpr std::uint64_t mb = 1024 * 1024;
+    constexpr std::uint64_t gb = 1024 * mb;
+    char text[G_ASCII_DTOSTR_BUF_SIZE];
+    if (*bytes > gb)
+    {
+        return std::string(
+                   g_ascii_formatd(text, sizeof(text), "%.2f", static_cast<double>(*bytes) / gb)) +
+               " GB";
+    }
+    return std::string(
+               g_ascii_formatd(text, sizeof(text), "%.1f", static_cast<double>(*bytes) / mb)) +
+           " MB";
 }
 
 std::string format_command_line(std::string_view arguments)

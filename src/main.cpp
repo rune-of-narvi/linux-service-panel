@@ -32,10 +32,22 @@ struct View
     Backend backend;
     ObjectPtr<GCancellable> cancellation{g_cancellable_new()};
     GtkColumnViewColumn* command_line_column;
+    GtkSorter* cpu_sorter;
+    GtkSorter* memory_sorter;
     GtkWidget* command_line_toggle;
+    ServiceSamples previous_samples;
+    guint metrics_timer = 0;
+    guint snapshot_revision = 0;
+    bool sampling = false;
     bool busy = false;
     bool running_only = false;
     bool show_system_services = false;
+
+    ~View()
+    {
+        if (metrics_timer)
+            g_source_remove(metrics_timer);
+    }
 };
 
 constexpr std::array actions{Action::start, Action::stop, Action::enable, Action::disable};
@@ -47,7 +59,7 @@ template <typename T> void delete_data(gpointer data)
 }
 
 // Each list item carries the full unit data used by sorting, filtering, and actions.
-const UnitRow* get_row(gconstpointer object)
+UnitRow* get_row(gconstpointer object)
 {
     return static_cast<UnitRow*>(
         g_object_get_data(G_OBJECT(const_cast<gpointer>(object)), "unit-row"));
@@ -86,6 +98,18 @@ GtkWidget* make_cell_label()
     gtk_label_set_xalign(GTK_LABEL(label), 0.0F);
     gtk_label_set_ellipsize(GTK_LABEL(label), PANGO_ELLIPSIZE_END);
     return label;
+}
+
+const char* usage_cell_key(Column type)
+{
+    return type == Column::cpu ? "cpu-cell" : "memory-cell";
+}
+
+void set_usage_cell(GtkLabel* label, const ServiceUsage& usage, Column type)
+{
+    const auto text = type == Column::cpu ? format_cpu_usage(usage.cpu_percent)
+                                          : format_memory_usage(usage.memory_bytes);
+    gtk_label_set_text(label, text.c_str());
 }
 
 GtkColumnViewColumn* append_column(GtkColumnView* view, const char* title, Column type)
@@ -149,11 +173,33 @@ GtkColumnViewColumn* append_column(GtkColumnView* view, const char* title, Colum
                            if (!row.substate.empty() && row.substate != row.active)
                                text += " (" + row.substate + ")";
                            break;
+                       case Column::cpu:
+                       case Column::memory:
+                           // Keep a reference to the visible cell until GTK recycles it.
+                           g_object_set_data(G_OBJECT(gtk_list_item_get_item(item)),
+                                             usage_cell_key(type), cell);
+                           gtk_label_set_xalign(GTK_LABEL(cell), 1.0F);
+                           set_usage_cell(GTK_LABEL(cell), row.usage, type);
+                           return;
                        }
                        gtk_label_set_text(GTK_LABEL(cell), text.c_str());
                        gtk_widget_set_tooltip_text(cell, text.c_str());
                    }),
         column_type);
+    if (type == Column::cpu || type == Column::memory)
+    {
+        g_signal_connect(
+            factory, "unbind",
+            G_CALLBACK(+[](GtkSignalListItemFactory*, GtkListItem* item, gpointer data)
+                       {
+                           auto* object = G_OBJECT(gtk_list_item_get_item(item));
+                           const auto key =
+                               usage_cell_key(static_cast<Column>(GPOINTER_TO_INT(data)));
+                           if (g_object_get_data(object, key) == gtk_list_item_get_child(item))
+                               g_object_set_data(object, key, nullptr);
+                       }),
+            column_type);
+    }
     const ObjectPtr<GtkColumnViewColumn> column(
         gtk_column_view_column_new(title, GTK_LIST_ITEM_FACTORY(factory)));
     const ObjectPtr<GtkCustomSorter> sorter(gtk_custom_sorter_new(
@@ -171,7 +217,25 @@ GtkColumnViewColumn* append_column(GtkColumnView* view, const char* title, Colum
         gtk_column_view_sort_by_column(view, column.get(), GTK_SORT_ASCENDING);
     if (type == Column::command_line)
         gtk_column_view_column_set_fixed_width(column.get(), 360);
+    if (type == Column::cpu || type == Column::memory)
+        gtk_column_view_column_set_fixed_width(column.get(), 106);
     return column.get();
+}
+
+void select_unit(View& view, const std::string& selected)
+{
+    if (selected.empty())
+        return;
+    auto* model = gtk_single_selection_get_model(view.selection);
+    for (guint index = 0; index < g_list_model_get_n_items(model); ++index)
+    {
+        const ObjectPtr<GObject> item(static_cast<GObject*>(g_list_model_get_item(model, index)));
+        if (get_row(item.get())->name == selected)
+        {
+            gtk_single_selection_set_selected(view.selection, index);
+            break;
+        }
+    }
 }
 
 void replace_rows(View& view, std::vector<UnitRow>& rows, const std::string& selected)
@@ -191,16 +255,96 @@ void replace_rows(View& view, std::vector<UnitRow>& rows, const std::string& sel
     g_list_store_splice(view.rows, 0, g_list_model_get_n_items(G_LIST_MODEL(view.rows)),
                         objects->pdata, objects->len);
 
-    auto* model = gtk_single_selection_get_model(view.selection);
-    for (guint index = 0; !selected.empty() && index < g_list_model_get_n_items(model); ++index)
+    select_unit(view, selected);
+}
+
+void update_usage(View& view, ServiceSamples samples)
+{
+    bool cpu_changed = false;
+    bool memory_changed = false;
+    auto* rows = G_LIST_MODEL(view.rows);
+    for (guint index = 0; index < g_list_model_get_n_items(rows); ++index)
     {
-        const ObjectPtr<GObject> item(static_cast<GObject*>(g_list_model_get_item(model, index)));
-        if (get_row(item.get())->name == selected)
+        const ObjectPtr<GObject> item(static_cast<GObject*>(g_list_model_get_item(rows, index)));
+        auto& row = *get_row(item.get());
+        const auto current = samples.find(row.name);
+        const auto previous = view.previous_samples.find(row.name);
+        ServiceUsage usage{};
+        if (is_running_service(row) && current != samples.end())
         {
-            gtk_single_selection_set_selected(view.selection, index);
-            break;
+            usage = measure_usage(current->second, previous == view.previous_samples.end()
+                                                       ? nullptr
+                                                       : &previous->second);
+        }
+        const bool new_cpu = row.usage.cpu_percent != usage.cpu_percent;
+        const bool new_memory = row.usage.memory_bytes != usage.memory_bytes;
+        row.usage = usage;
+        if (new_cpu)
+        {
+            if (auto* label = g_object_get_data(item.get(), usage_cell_key(Column::cpu)))
+                set_usage_cell(GTK_LABEL(label), usage, Column::cpu);
+            cpu_changed = true;
+        }
+        if (new_memory)
+        {
+            if (auto* label = g_object_get_data(item.get(), usage_cell_key(Column::memory)))
+                set_usage_cell(GTK_LABEL(label), usage, Column::memory);
+            memory_changed = true;
         }
     }
+    view.previous_samples = std::move(samples);
+
+    // Sorting by live usage can move rows. Keep the selected unit the same.
+    const auto* row = selected_row(view);
+    const auto selected = row ? row->name : std::string{};
+    if (cpu_changed)
+        gtk_sorter_changed(view.cpu_sorter, GTK_SORTER_CHANGE_DIFFERENT);
+    if (memory_changed)
+        gtk_sorter_changed(view.memory_sorter, GTK_SORTER_CHANGE_DIFFERENT);
+    if (!selected_row(view) || selected_row(view)->name != selected)
+        select_unit(view, selected);
+}
+
+void sample_usage(View& view)
+{
+    if (view.busy || view.sampling)
+        return;
+    auto* app = gtk_window_get_application(view.window);
+    if (!app)
+        return;
+    view.sampling = true;
+    const ObjectPtr<GTask> task(g_task_new(
+        view.window, view.cancellation.get(),
+        +[](GObject* source, GAsyncResult* done, gpointer application)
+        {
+            const GlibPtr<GApplication, g_application_release> hold(G_APPLICATION(application));
+            auto& view = *static_cast<View*>(g_object_get_data(source, "view"));
+            view.sampling = false;
+            const std::unique_ptr<ServiceSamples> samples(
+                static_cast<ServiceSamples*>(g_task_propagate_pointer(G_TASK(done), nullptr)));
+            const auto revision = GPOINTER_TO_UINT(g_task_get_task_data(G_TASK(done)));
+            if (gtk_window_get_application(view.window) && !view.busy &&
+                revision == view.snapshot_revision)
+                update_usage(view, samples ? std::move(*samples) : ServiceSamples{});
+        },
+        app));
+    g_task_set_task_data(task.get(), GUINT_TO_POINTER(view.snapshot_revision), nullptr);
+    g_application_hold(G_APPLICATION(app));
+    g_task_run_in_thread(
+        task.get(),
+        +[](GTask* task, gpointer, gpointer, GCancellable* cancellation)
+        {
+            try
+            {
+                auto samples =
+                    std::make_unique<ServiceSamples>(sample_running_services(cancellation));
+                g_task_return_pointer(task, samples.release(), delete_data<ServiceSamples>);
+            }
+            catch (const std::exception& error)
+            {
+                g_task_return_new_error(task, G_IO_ERROR, G_IO_ERROR_FAILED, "%s", error.what());
+            }
+        });
 }
 
 void show_status(View& view, const char* message, bool can_retry = false)
@@ -250,10 +394,23 @@ void run(View& view, Action action)
                                     "  ·  Running services: " + std::to_string(running);
                 gtk_label_set_text(view.counts, counts.c_str());
                 replace_rows(view, result->rows, request->unit);
+                ++view.snapshot_revision;
                 show_status(view, result->action_message.c_str());
             }
             view.busy = false;
             update_buttons(view);
+            if (result && !result->authorization_cancelled && !view.metrics_timer)
+            {
+                view.metrics_timer = g_timeout_add(
+                    2000,
+                    +[](gpointer data) -> gboolean
+                    {
+                        sample_usage(*static_cast<View*>(data));
+                        return G_SOURCE_CONTINUE;
+                    },
+                    &view);
+                sample_usage(view);
+            }
         },
         app));
     // Capture the selected unit name on the UI thread before handing the request to the worker.
@@ -301,8 +458,13 @@ void activate(GApplication* app, gpointer)
     g_signal_connect(window, "close-request",
                      G_CALLBACK(+[](GtkWindow*, gpointer data) -> gboolean
                                 {
-                                    g_cancellable_cancel(
-                                        static_cast<View*>(data)->cancellation.get());
+                                    auto& view = *static_cast<View*>(data);
+                                    if (view.metrics_timer)
+                                    {
+                                        g_source_remove(view.metrics_timer);
+                                        view.metrics_timer = 0;
+                                    }
+                                    g_cancellable_cancel(view.cancellation.get());
                                     return FALSE;
                                 }),
                      view);
@@ -364,6 +526,10 @@ void activate(GApplication* app, gpointer)
     append_column(columns, "Name / Executable", Column::name);
     append_column(columns, "Enabled", Column::startup);
     append_column(columns, "Run Status", Column::status);
+    view->cpu_sorter =
+        gtk_column_view_column_get_sorter(append_column(columns, "CPU Usage", Column::cpu));
+    view->memory_sorter =
+        gtk_column_view_column_get_sorter(append_column(columns, "RAM Usage", Column::memory));
     view->command_line_column = append_column(columns, "Command Line", Column::command_line);
     gtk_column_view_column_set_visible(view->command_line_column, false);
 

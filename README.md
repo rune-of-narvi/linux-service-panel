@@ -68,6 +68,10 @@ On GNOME on Xorg, use
   services that systemd reports as running. The checkbox also works with search.
 - Check **Show system services** to reveal units whose names start with
   `systemd-`. These units are hidden by default.
+- **CPU Usage** and **RAM Usage** update every two seconds for running services.
+  CPU usage covers the whole service. One fully used logical CPU is 100%.
+  RAM shows the memory charged to the service in MB, switching to GB above
+  1024 MB, using 1024-based units. A dash indicates an unavailable reading.
 - The footer shows the total number of units and the number of running
   services. Both counts use the full list, even when filters are active.
 - Use the **Command Line** button to show the live arguments of each service’s

@@ -1,3 +1,11 @@
+service-panel (0.6.0) noble; urgency=medium
+
+  * Add sortable CPU Usage and RAM Usage columns for running services.
+  * Sample service-wide resources every two seconds without reloading the
+    list. Show RAM in MB and switch to GB above 1024 MB.
+
+ -- Qasim Shafi <qasi123@hotmail.com>  Tue, 24 Nov 2026 11:00:00 +0100
+
 service-panel (0.5.1) noble; urgency=medium
 
   * Hide systemd-prefixed units by default and add a Show system services

@@ -102,6 +102,62 @@ TEST(UnitRowFilter, IdentifiesUnitsBySystemdNamePrefix)
     EXPECT_FALSE(is_systemd_unit(row));
 }
 
+TEST(ServiceUsage, MeasuresCpuAcrossAllCoresAndKeepsIdleAtZero)
+{
+    const ServiceSample baseline{1'000'000'000, 512, 7, 1'000'000};
+    auto current = ServiceSample{4'000'000'000, 1024, 7, 3'000'000};
+
+    EXPECT_DOUBLE_EQ(measure_usage(current, &baseline).cpu_percent.value(), 150.0);
+    EXPECT_EQ(measure_usage(current, &baseline).memory_bytes, 1024);
+    current.cpu_nanoseconds = baseline.cpu_nanoseconds;
+    EXPECT_DOUBLE_EQ(measure_usage(current, &baseline).cpu_percent.value(), 0.0);
+}
+
+TEST(ServiceUsage, WaitsForAValidBaseline)
+{
+    const ServiceSample baseline{100, 512, 7, 1000};
+    auto current = ServiceSample{200, 1024, 8, 2000};
+    EXPECT_FALSE(measure_usage(current, nullptr).cpu_percent);
+    EXPECT_EQ(measure_usage(current, nullptr).memory_bytes, 1024);
+    EXPECT_FALSE(measure_usage(current, &baseline).cpu_percent);
+
+    current.started_at = baseline.started_at;
+    current.cpu_nanoseconds = 99;
+    EXPECT_FALSE(measure_usage(current, &baseline).cpu_percent);
+    current.cpu_nanoseconds.reset();
+    EXPECT_FALSE(measure_usage(current, &baseline).cpu_percent);
+    current.cpu_nanoseconds = 200;
+    current.sampled_at = baseline.sampled_at;
+    EXPECT_FALSE(measure_usage(current, &baseline).cpu_percent);
+}
+
+TEST(ServiceUsage, FormatsMemoryAbove1024MBInGB)
+{
+    constexpr std::uint64_t mb = 1024 * 1024;
+    EXPECT_EQ(format_memory_usage(std::nullopt), "—");
+    EXPECT_EQ(format_memory_usage(0), "0.0 MB");
+    EXPECT_EQ(format_memory_usage(512 * mb), "512.0 MB");
+    EXPECT_EQ(format_memory_usage(1024 * mb), "1024.0 MB");
+    EXPECT_EQ(format_memory_usage(1024 * mb + 1), "1.00 GB");
+    EXPECT_EQ(format_memory_usage(1536 * mb), "1.50 GB");
+    EXPECT_EQ(format_cpu_usage(std::nullopt), "—");
+    EXPECT_EQ(format_cpu_usage(150.25), "150.2%");
+}
+
+TEST(UnitRowSort, ComparesUsageNumericallyAndDistinguishesUnavailableFromZero)
+{
+    UnitRow small;
+    UnitRow large;
+    large.usage = {100.0, 2'000'000'000};
+    small.usage = {9.0, 512'000'000};
+    EXPECT_LT(compare_rows(small, large, Column::cpu), 0);
+    EXPECT_LT(compare_rows(small, large, Column::memory), 0);
+    small.usage = {0.0, 0};
+    const UnitRow unavailable;
+    EXPECT_LT(compare_rows(unavailable, small, Column::cpu), 0);
+    EXPECT_LT(compare_rows(unavailable, small, Column::memory), 0);
+}
+
 } // namespace
 
 TEST(CommandLine, PreservesWhitespaceAndEmptyArguments)

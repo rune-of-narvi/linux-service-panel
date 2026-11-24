@@ -4,7 +4,7 @@
 
 #include <gio/gio.h>
 
-#include <map>
+#include <limits>
 #include <stdexcept>
 #include <utility>
 
@@ -14,6 +14,7 @@ namespace
 constexpr auto destination = "org.freedesktop.systemd1";
 constexpr auto manager_path = "/org/freedesktop/systemd1";
 constexpr auto manager_interface = "org.freedesktop.systemd1.Manager";
+constexpr auto service_interface = "org.freedesktop.systemd1.Service";
 
 void check_error(GError* error)
 {
@@ -26,12 +27,12 @@ void check_error(GError* error)
 }
 
 VariantPtr call(GDBusConnection* bus, const char* path, const char* interface, const char* method,
-                GVariant* parameters = nullptr)
+                GVariant* parameters = nullptr, GCancellable* cancellation = nullptr)
 {
     GError* error = nullptr;
     VariantPtr result(g_dbus_connection_call_sync(bus, destination, path, interface, method,
                                                   parameters, nullptr, G_DBUS_CALL_FLAGS_NONE, 5000,
-                                                  nullptr, &error));
+                                                  cancellation, &error));
     check_error(error);
     return result;
 }
@@ -56,10 +57,11 @@ std::string unit_file_name(const std::string& path)
     return slash == std::string::npos ? path : path.substr(slash + 1);
 }
 
-VariantPtr get_properties(GDBusConnection* bus, const std::string& path, const char* interface)
+VariantPtr get_properties(GDBusConnection* bus, const std::string& path, const char* interface,
+                          GCancellable* cancellation = nullptr)
 {
     auto reply = call(bus, path.c_str(), "org.freedesktop.DBus.Properties", "GetAll",
-                      g_variant_new("(s)", interface));
+                      g_variant_new("(s)", interface), cancellation);
     return VariantPtr(g_variant_get_child_value(reply.get(), 0));
 }
 
@@ -67,6 +69,15 @@ std::string property_string(GVariant* properties, const char* key)
 {
     const char* value = nullptr;
     return g_variant_lookup(properties, key, "&s", &value) ? value : "";
+}
+
+std::optional<std::uint64_t> usage_counter(GVariant* properties, const char* key)
+{
+    guint64 value = 0;
+    if (g_variant_lookup(properties, key, "t", &value) &&
+        value != std::numeric_limits<guint64>::max())
+        return value;
+    return std::nullopt;
 }
 
 void read_unit_details(GDBusConnection* bus, UnitEntry& entry)
@@ -94,7 +105,7 @@ void read_unit_details(GDBusConnection* bus, UnitEntry& entry)
         if (!row.name.ends_with(".service"))
             return;
 
-        auto props = get_properties(bus, entry.path, "org.freedesktop.systemd1.Service");
+        auto props = get_properties(bus, entry.path, service_interface);
         guint32 pid = 0;
         g_variant_lookup(props.get(), "MainPID", "u", &pid);
         row.pid = pid;
@@ -116,6 +127,44 @@ void read_unit_details(GDBusConnection* bus, UnitEntry& entry)
 }
 
 } // namespace
+
+ServiceSamples sample_running_services(GCancellable* cancellation)
+{
+    GError* error = nullptr;
+    const ObjectPtr<GDBusConnection> bus(g_bus_get_sync(G_BUS_TYPE_SYSTEM, cancellation, &error));
+    check_error(error);
+    const char* const active_states[] = {"active", nullptr};
+    const char* const services[] = {"*.service", nullptr};
+    auto reply = call(bus.get(), manager_path, manager_interface, "ListUnitsByPatterns",
+                      g_variant_new("(^as^as)", active_states, services), cancellation);
+    const VariantPtr units(g_variant_get_child_value(reply.get(), 0));
+
+    ServiceSamples samples;
+    for (gsize i = 0; i < g_variant_n_children(units.get()); ++i)
+    {
+        if (g_cancellable_is_cancelled(cancellation))
+            break;
+        const VariantPtr unit(g_variant_get_child_value(units.get(), i));
+        if (string_at(unit.get(), 4) != "running")
+            continue;
+        try
+        {
+            const auto props = get_properties(bus.get(), string_at(unit.get(), 6),
+                                              service_interface, cancellation);
+            guint64 started_at = 0;
+            g_variant_lookup(props.get(), "ExecMainStartTimestampMonotonic", "t", &started_at);
+            samples.emplace(string_at(unit.get(), 0),
+                            ServiceSample{usage_counter(props.get(), "CPUUsageNSec"),
+                                          usage_counter(props.get(), "MemoryCurrent"), started_at,
+                                          static_cast<std::uint64_t>(g_get_monotonic_time())});
+        }
+        catch (const std::runtime_error&)
+        {
+            // A service may stop or become unavailable after the list call.
+        }
+    }
+    return samples;
+}
 
 std::vector<UnitRow> list_units(bool command_lines)
 {
